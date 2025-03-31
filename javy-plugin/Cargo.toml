@@ -1,0 +1,10 @@
+[package]
+name = "javy-chicory-plugin"
+version = "0.1.0"
+
+[lib]
+name = "javy_chicory_plugin"
+crate-type = ["cdylib"]
+
+[dependencies]
+javy-plugin-api = "3.0.0"
