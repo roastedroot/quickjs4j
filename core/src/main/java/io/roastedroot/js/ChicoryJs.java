@@ -16,6 +16,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @WasmModuleInterface(WasmResource.absoluteFile)
 public final class ChicoryJs implements AutoCloseable {
@@ -89,7 +90,14 @@ public final class ChicoryJs implements AutoCloseable {
             JsonNode tree = mapper.readTree(argsString);
 
             if (tree.size() != receiver.paramTypes().size()) {
-                throw new IllegalArgumentException("Invalid arity of the invoked function");
+                throw new IllegalArgumentException(
+                        "Function "
+                                + receiver.name()
+                                + " has been invoked with the incorrect number of parameters needs:"
+                                + " "
+                                + receiver.paramTypes().stream()
+                                        .map(Class::getCanonicalName)
+                                        .collect(Collectors.joining(", ")));
             }
 
             for (int i = 0; i < tree.size(); i++) {
@@ -134,6 +142,7 @@ public final class ChicoryJs implements AutoCloseable {
     private ChicoryJs(Function<String, String> importFun, Builtins builtins) {
         // TODO: have proper DI here
         this.mapper = new ObjectMapper();
+        // this.mapper.configure(JsonParser.Feature.ALLOW_SINGLE_QUOTES, true);
 
         this.builtins = builtins;
         this.importFun = importFun;
@@ -178,7 +187,7 @@ public final class ChicoryJs implements AutoCloseable {
                             + fun.name()
                             + " = (...args) => { return java_invoke("
                             + fun.index()
-                            + ", \"[\" + args + \"]\" ) };\n");
+                            + ", JSON.stringify(args) ) };\n");
         }
         return preludeBuilder.toString();
     }

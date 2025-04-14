@@ -72,6 +72,19 @@ public final class Builtins {
                             }));
         }
 
+        public Builder addVoidToString(String name, Supplier<String> fn) {
+            return add(
+                    name,
+                    new JsFunction(
+                            name,
+                            functions.size(),
+                            List.of(),
+                            String.class,
+                            (args) -> {
+                                return fn.get();
+                            }));
+        }
+
         public Builder addIntToVoid(String name, Consumer<Integer> fn) {
             return add(
                     name,
@@ -123,6 +136,33 @@ public final class Builtins {
                             Integer.class,
                             (args) -> {
                                 return fn.apply((String) args.get(0));
+                            }));
+        }
+
+        public Builder addStringToString(String name, Function<String, String> fn) {
+            return add(
+                    name,
+                    new JsFunction(
+                            name,
+                            functions.size(),
+                            List.of(String.class),
+                            String.class,
+                            (args) -> {
+                                return fn.apply((String) args.get(0));
+                            }));
+        }
+
+        public Builder addStringToVoid(String name, Consumer<String> fn) {
+            return add(
+                    name,
+                    new JsFunction(
+                            name,
+                            functions.size(),
+                            List.of(String.class),
+                            Integer.class,
+                            (args) -> {
+                                fn.accept((String) args.get(0));
+                                return null;
                             }));
         }
 

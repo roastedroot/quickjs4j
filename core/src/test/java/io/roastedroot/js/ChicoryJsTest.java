@@ -79,48 +79,84 @@ public class ChicoryJsTest {
         chicoryJs.close();
     }
 
-    public static void func1() {
-        System.out.println("void -> void function");
+    boolean func1Called;
+
+    void func1() {
+        func1Called = true;
     }
 
-    public static void func2(int a) {
-        System.out.println("int -> void function " + a);
+    int func2Called;
+
+    void func2(int a) {
+        func2Called = a;
     }
 
-    public static void func3(String a) {
-        System.out.println("String -> void function " + a);
+    String func3Called;
+
+    void func3(String a) {
+        func3Called = a;
     }
 
-    public static String func4() {
-        System.out.println("void -> String functionS");
-        return "funcS";
+    String func4Called;
+
+    String func4() {
+        func4Called = "func4";
+        return func4Called;
     }
 
-    public static String func5(int a) {
-        System.out.println("void -> String functionS " + a);
+    int func5Called;
+
+    String func5(int a) {
+        func5Called = a;
         return "funcS" + a;
     }
 
-    public static String func6(String a) {
+    String func6Called;
+
+    String func6(String a) {
         System.out.println("void -> String functionS " + a);
+        func6Called = a;
         return "funcS" + a;
     }
 
-    //    @Test
-    //    public void callJavaFunctionsFromJSWithDifferentParamsAndReturns() {
-    //        var builtins = Builtins.builder()
-    //                .build();
-    //
-    //        var chicoryJs = ChicoryJs.builder()
-    //                .withBuiltins(builtins).build();
-    //
-    //        var codePtr = chicoryJs.compile("check(add(40, 2));");
-    //        chicoryJs.exec(codePtr);
-    //        chicoryJs.free(codePtr);
-    //        chicoryJs.close();
-    //    }
+    static void compileAndExec(ChicoryJs chicoryJs, String code) {
+        var codePtr = chicoryJs.compile(code);
+        chicoryJs.exec(codePtr);
+        chicoryJs.free(codePtr);
+        chicoryJs.close();
+    }
 
-    // TODO: write a test to verify different types of args/returns
+    @Test
+    public void callJavaFunctionsFromJSWithDifferentParamsAndReturns() {
+        var builtins =
+                Builtins.builder()
+                        .addVoidToVoid("func1", this::func1)
+                        .addIntToVoid("func2", this::func2)
+                        .addStringToVoid("func3", this::func3)
+                        .addVoidToString("func4", this::func4)
+                        .addIntToString("func5", this::func5)
+                        .addStringToString("func6", this::func6)
+                        .build();
+
+        var chicoryJs = ChicoryJs.builder().withBuiltins(builtins).build();
+
+        compileAndExec(chicoryJs, "func1();");
+        assertTrue(func1Called);
+
+        compileAndExec(chicoryJs, "func2(10);");
+        assertEquals(10, func2Called);
+
+        compileAndExec(chicoryJs, "func3(\"h3110\");");
+        assertEquals("h3110", func3Called);
+
+        compileAndExec(chicoryJs, "func4();");
+        assertEquals("func4", func4Called);
+
+        compileAndExec(chicoryJs, "func5(11);");
+        assertEquals(11, func5Called);
+    }
+
+    // TODO: write a test to verify mixed types of args/returns
 
     // TODO: verify if we need to invoke functions on objects passed as proxies?
 }
