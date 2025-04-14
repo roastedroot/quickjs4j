@@ -30,6 +30,13 @@
       <version>${chicory.version}</version>
     </dependency>
 
+    <!-- Jackson used for function arg/return ser/deser -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>${jackson.version}</version>
+    </dependency>
+
     <!-- ============= Testing ============= -->
     <dependency>
       <groupId>org.junit.jupiter</groupId>

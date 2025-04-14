@@ -10,6 +10,10 @@ import com.dylibso.chicory.runtime.Instance;
 import com.dylibso.chicory.wasi.WasiOptions;
 import com.dylibso.chicory.wasi.WasiPreview1;
 import com.dylibso.chicory.wasm.types.ValueType;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
@@ -19,6 +23,9 @@ public final class ChicoryJs implements AutoCloseable {
     private final WasiPreview1 wasi = WasiPreview1.builder().withOptions(wasiOpts).build();
     private final Instance instance;
     private final ChicoryJs_ModuleExports exports;
+
+    private final Builtins builtins;
+    private final ObjectMapper mapper;
 
     private static final int ALIGNMENT = 1;
 
@@ -62,7 +69,73 @@ public final class ChicoryJs implements AutoCloseable {
         return new long[] {widePtr};
     }
 
-    private ChicoryJs(Function<String, String> importFun) {
+    private long[] invoke(Instance instance, long[] args) {
+        int proxyPtr = (int) args[0];
+
+        int ptr = (int) args[1];
+        int len = (int) args[2];
+
+        var bytes = instance.memory().readBytes(ptr, len);
+        var argsString = new String(bytes, UTF_8);
+
+        var receiver = builtins.byIndex(proxyPtr);
+        if (receiver == null) {
+            throw new IllegalArgumentException("Failed to find builtin at index " + proxyPtr);
+        }
+
+        var argsList = new ArrayList<Object>();
+        try {
+            JsonNode tree = mapper.readTree(argsString);
+
+            if (tree.size() != receiver.paramTypes().size()) {
+                throw new IllegalArgumentException("Invalid arity of the invoked function");
+            }
+
+            for (int i = 0; i < tree.size(); i++) {
+                var clazz = receiver.paramTypes().get(i);
+                var value = tree.get(i);
+
+                argsList.add(mapper.treeToValue(value, clazz));
+            }
+
+            var res = receiver.invoke(argsList);
+
+            var returnStr = mapper.writerFor(receiver.returnType()).writeValueAsString(res);
+            var returnBytes = returnStr.getBytes();
+
+            var returnPtr =
+                    exports.canonicalAbiRealloc(
+                            0, // original_ptr
+                            0, // original_size
+                            ALIGNMENT, // alignment
+                            returnBytes.length // new size
+                            );
+            exports.memory().write(returnPtr, returnBytes);
+
+            var LEN = 8;
+            var widePtr =
+                    exports.canonicalAbiRealloc(
+                            0, // original_ptr
+                            0, // original_size
+                            ALIGNMENT, // alignment
+                            LEN // new size
+                            );
+
+            // TODO: verify FREEs!
+            instance.memory().writeI32(widePtr, returnPtr);
+            instance.memory().writeI32(widePtr + 4, returnBytes.length);
+
+            return new long[] {widePtr};
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private ChicoryJs(Function<String, String> importFun, Builtins builtins) {
+        // TODO: have proper DI here
+        this.mapper = new ObjectMapper();
+
+        this.builtins = builtins;
         this.importFun = importFun;
         instance =
                 Instance.builder(JavyPluginModule.load())
@@ -78,14 +151,37 @@ public final class ChicoryJs implements AutoCloseable {
                                                         List.of(ValueType.I32, ValueType.I32),
                                                         List.of(ValueType.I32),
                                                         this::importedFunction))
+                                        .addFunction(
+                                                new HostFunction(
+                                                        "chicory",
+                                                        "invoke",
+                                                        List.of(
+                                                                ValueType.I32,
+                                                                ValueType.I32,
+                                                                ValueType.I32),
+                                                        List.of(ValueType.I32),
+                                                        this::invoke))
                                         .build())
                         .build();
         exports = new ChicoryJs_ModuleExports(instance);
         exports.initializeRuntime();
     }
 
+    // This function is used to dynamically generate the bindings defined by the Builtins
+    private String jsPrelude() {
+        var preludeBuilder = new StringBuilder();
+        // TODO: if this grows I need a JS writer something
+        for (int i = 0; i < builtins.size(); i++) {
+            var fun = builtins.byIndex(i);
+            preludeBuilder.append("globalThis." + fun.name() + " = (...args) => { return java_invoke(" + fun.index() + ", \"[\" + args + \"]\" ) };\n");
+        }
+        //        preludeBuilder.append("globalThis.add = (...args) => { return java_invoke(0, \"[\" + args + \"]\" ) };\n");
+        //        preludeBuilder.append("globalThis.check = (...args) => { java_invoke(1, \"[\" + args + \"]\" ) };\n");
+        return preludeBuilder.toString();
+    }
+
     public int compile(String js) {
-        byte[] jsCode = (js).getBytes(UTF_8);
+        byte[] jsCode = (jsPrelude() + js).getBytes(UTF_8);
         var ptr =
                 exports.canonicalAbiRealloc(
                         0, // original_ptr
@@ -129,9 +225,15 @@ public final class ChicoryJs implements AutoCloseable {
     }
 
     public static final class Builder {
+        private Builtins builtins;
         private Function<String, String> importedFunction;
 
         private Builder() {}
+
+        public Builder withBuiltins(Builtins builtins) {
+            this.builtins = builtins;
+            return this;
+        }
 
         public Builder withImportedFunction(Function<String, String> imprtFn) {
             this.importedFunction = imprtFn;
@@ -139,7 +241,7 @@ public final class ChicoryJs implements AutoCloseable {
         }
 
         public ChicoryJs build() {
-            return new ChicoryJs(importedFunction);
+            return new ChicoryJs(importedFunction, builtins);
         }
     }
 }

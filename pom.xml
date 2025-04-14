@@ -48,6 +48,7 @@
 
     <!-- runtime versions -->
     <chicory.version>1.2.1</chicory.version>
+    <jackson.version>2.18.3</jackson.version>
   </properties>
 
   <build>
