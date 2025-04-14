@@ -5,8 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
+import org.opentest4j.AssertionFailedError;
 
 public class ChicoryJsTest {
 
@@ -127,6 +129,7 @@ public class ChicoryJsTest {
 
     @Test
     public void callJavaFunctionsFromJSWithDifferentParamsAndReturns() {
+        final AtomicReference<String> toCheck = new AtomicReference<>();
         var builtins =
                 Builtins.builder()
                         .addVoidToVoid("func1", this::func1)
@@ -135,6 +138,7 @@ public class ChicoryJsTest {
                         .addVoidToString("func4", this::func4)
                         .addIntToString("func5", this::func5)
                         .addStringToString("func6", this::func6)
+                        .addStringToVoid("check", str -> assertEquals(toCheck.get(), str))
                         .build();
 
         var chicoryJs = ChicoryJs.builder().withBuiltins(builtins).build();
@@ -148,11 +152,16 @@ public class ChicoryJsTest {
         compileAndExec(chicoryJs, "func3(\"h3110\");");
         assertEquals("h3110", func3Called);
 
-        compileAndExec(chicoryJs, "func4();");
+        toCheck.set("func4");
+        compileAndExec(chicoryJs, "check(func4());");
         assertEquals("func4", func4Called);
 
         compileAndExec(chicoryJs, "func5(11);");
         assertEquals(11, func5Called);
+
+        // negative - needs to be last as the runtime needs a restart after exception
+        toCheck.set("myFunc");
+        assertThrows(AssertionFailedError.class, () -> compileAndExec(chicoryJs, "check(func4());"));
     }
 
     // TODO: write a test to verify mixed types of args/returns
