@@ -76,6 +76,7 @@ public final class ChicoryJs implements AutoCloseable {
         int len = (int) args[2];
 
         var bytes = instance.memory().readBytes(ptr, len);
+        this.exports.canonicalAbiFree(ptr, len, ALIGNMENT);
         var argsString = new String(bytes, UTF_8);
 
         var receiver = builtins.byIndex(proxyPtr);
@@ -121,7 +122,6 @@ public final class ChicoryJs implements AutoCloseable {
                             LEN // new size
                             );
 
-            // TODO: verify FREEs!
             instance.memory().writeI32(widePtr, returnPtr);
             instance.memory().writeI32(widePtr + 4, returnBytes.length);
 
@@ -173,10 +173,13 @@ public final class ChicoryJs implements AutoCloseable {
         // TODO: if this grows I need a JS writer something
         for (int i = 0; i < builtins.size(); i++) {
             var fun = builtins.byIndex(i);
-            preludeBuilder.append("globalThis." + fun.name() + " = (...args) => { return java_invoke(" + fun.index() + ", \"[\" + args + \"]\" ) };\n");
+            preludeBuilder.append(
+                    "globalThis."
+                            + fun.name()
+                            + " = (...args) => { return java_invoke("
+                            + fun.index()
+                            + ", \"[\" + args + \"]\" ) };\n");
         }
-        //        preludeBuilder.append("globalThis.add = (...args) => { return java_invoke(0, \"[\" + args + \"]\" ) };\n");
-        //        preludeBuilder.append("globalThis.check = (...args) => { java_invoke(1, \"[\" + args + \"]\" ) };\n");
         return preludeBuilder.toString();
     }
 

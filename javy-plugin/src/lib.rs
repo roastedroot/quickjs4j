@@ -1,6 +1,7 @@
 extern crate javy_plugin_api;
 
 use javy_plugin_api::{import_namespace, javy::quickjs::prelude::Func, Config};
+use javy_plugin_api::javy::alloc;
 
 import_namespace!("chicory_plugin");
 
@@ -35,7 +36,10 @@ fn invoke_exec(proxy_ptr: u32, args_str: String) -> String {
             unreachable!()
         };
         let res = std::slice::from_raw_parts(*ptr as *const u8, *len as usize);
-        std::str::from_utf8(res).unwrap().to_string()
+        let str_result = std::str::from_utf8(res).unwrap().to_string();
+        alloc::canonical_abi_free(*wide_ptr as *mut u8, 8, 1);
+        alloc::canonical_abi_free(*ptr as *mut u8, *len as usize, 1);
+        str_result
     };
 
     return_str

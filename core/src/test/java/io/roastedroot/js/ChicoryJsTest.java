@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
-
 import org.junit.jupiter.api.Test;
 
 public class ChicoryJsTest {
@@ -42,19 +41,20 @@ public class ChicoryJsTest {
     public static int add(int a, int b) {
         return a + b;
     }
+
     public static Consumer<Integer> check(int expected) {
         return (v) -> assertEquals(expected, v);
     }
 
     @Test
     public void callJavaFunctionsFromJS() {
-        var builtins = Builtins.builder()
-                .addIntIntToInt("add", ChicoryJsTest::add)
-                .addIntToVoid("check", ChicoryJsTest.check(42))
-                .build();
+        var builtins =
+                Builtins.builder()
+                        .addIntIntToInt("add", ChicoryJsTest::add)
+                        .addIntToVoid("check", ChicoryJsTest.check(42))
+                        .build();
 
-        var chicoryJs = ChicoryJs.builder()
-                .withBuiltins(builtins).build();
+        var chicoryJs = ChicoryJs.builder().withBuiltins(builtins).build();
 
         var codePtr = chicoryJs.compile("check(add(40, 2));");
         chicoryJs.exec(codePtr);
@@ -64,13 +64,13 @@ public class ChicoryJsTest {
 
     @Test
     public void callJavaFunctionsFromJSNegativeCheck() {
-        var builtins = Builtins.builder()
-                .addIntIntToInt("add", ChicoryJsTest::add)
-                .addIntToVoid("check", ChicoryJsTest.check(43))
-                .build();
+        var builtins =
+                Builtins.builder()
+                        .addIntIntToInt("add", ChicoryJsTest::add)
+                        .addIntToVoid("check", ChicoryJsTest.check(43))
+                        .build();
 
-        var chicoryJs = ChicoryJs.builder()
-                .withBuiltins(builtins).build();
+        var chicoryJs = ChicoryJs.builder().withBuiltins(builtins).build();
 
         var codePtr = chicoryJs.compile("check(add(40, 2));");
 
@@ -82,38 +82,43 @@ public class ChicoryJsTest {
     public static void func1() {
         System.out.println("void -> void function");
     }
+
     public static void func2(int a) {
         System.out.println("int -> void function " + a);
     }
+
     public static void func3(String a) {
         System.out.println("String -> void function " + a);
     }
+
     public static String func4() {
         System.out.println("void -> String functionS");
         return "funcS";
     }
+
     public static String func5(int a) {
         System.out.println("void -> String functionS " + a);
         return "funcS" + a;
     }
+
     public static String func6(String a) {
         System.out.println("void -> String functionS " + a);
         return "funcS" + a;
     }
 
-//    @Test
-//    public void callJavaFunctionsFromJSWithDifferentParamsAndReturns() {
-//        var builtins = Builtins.builder()
-//                .build();
-//
-//        var chicoryJs = ChicoryJs.builder()
-//                .withBuiltins(builtins).build();
-//
-//        var codePtr = chicoryJs.compile("check(add(40, 2));");
-//        chicoryJs.exec(codePtr);
-//        chicoryJs.free(codePtr);
-//        chicoryJs.close();
-//    }
+    //    @Test
+    //    public void callJavaFunctionsFromJSWithDifferentParamsAndReturns() {
+    //        var builtins = Builtins.builder()
+    //                .build();
+    //
+    //        var chicoryJs = ChicoryJs.builder()
+    //                .withBuiltins(builtins).build();
+    //
+    //        var codePtr = chicoryJs.compile("check(add(40, 2));");
+    //        chicoryJs.exec(codePtr);
+    //        chicoryJs.free(codePtr);
+    //        chicoryJs.close();
+    //    }
 
     // TODO: write a test to verify different types of args/returns
 

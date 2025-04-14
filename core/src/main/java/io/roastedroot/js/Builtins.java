@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -44,75 +43,87 @@ public final class Builtins {
         public Builder add(String name, JsFunction fun) {
             // Early verify the order?
             // TODO: check if someone might want to leave holes
-            assert(fun.index() == functions.size());
+            assert (fun.index() == functions.size());
             functions.add(fun);
             return this;
         }
 
         public Builder addIntIntToInt(String name, BiFunction<Integer, Integer, Integer> fn) {
-            return add(name, new JsFunction(
+            return add(
                     name,
-                    functions.size(),
-                    List.of(Integer.class, Integer.class),
-                    Integer.class,
-                    (args) -> fn.apply((Integer) args.get(0), (Integer) args.get(1))));
+                    new JsFunction(
+                            name,
+                            functions.size(),
+                            List.of(Integer.class, Integer.class),
+                            Integer.class,
+                            (args) -> fn.apply((Integer) args.get(0), (Integer) args.get(1))));
         }
 
         public Builder addVoidToInt(String name, Supplier<Integer> fn) {
-            return add(name, new JsFunction(
+            return add(
                     name,
-                    functions.size(),
-                    List.of(),
-                    Integer.class,
-                    (args) -> {
-                        return fn.get();
-                    }));
+                    new JsFunction(
+                            name,
+                            functions.size(),
+                            List.of(),
+                            Integer.class,
+                            (args) -> {
+                                return fn.get();
+                            }));
         }
 
         public Builder addIntToVoid(String name, Consumer<Integer> fn) {
-            return add(name, new JsFunction(
+            return add(
                     name,
-                    functions.size(),
-                    List.of(Integer.class),
-                    Void.class,
-                    (args) -> {
-                        fn.accept((Integer) args.get(0));
-                        return null;
-                    }));
+                    new JsFunction(
+                            name,
+                            functions.size(),
+                            List.of(Integer.class),
+                            Void.class,
+                            (args) -> {
+                                fn.accept((Integer) args.get(0));
+                                return null;
+                            }));
         }
 
         public Builder addVoidToVoid(String name, Runnable fn) {
-            return add(name, new JsFunction(
+            return add(
                     name,
-                    functions.size(),
-                    List.of(),
-                    Void.class,
-                    (args) -> {
-                        fn.run();
-                        return null;
-                    }));
+                    new JsFunction(
+                            name,
+                            functions.size(),
+                            List.of(),
+                            Void.class,
+                            (args) -> {
+                                fn.run();
+                                return null;
+                            }));
         }
 
         public Builder addIntToString(String name, Function<Integer, String> fn) {
-            return add(name, new JsFunction(
+            return add(
                     name,
-                    functions.size(),
-                    List.of(Integer.class),
-                    String.class,
-                    (args) -> {
-                        return fn.apply((Integer) args.get(0));
-                    }));
+                    new JsFunction(
+                            name,
+                            functions.size(),
+                            List.of(Integer.class),
+                            String.class,
+                            (args) -> {
+                                return fn.apply((Integer) args.get(0));
+                            }));
         }
 
         public Builder addStringToInt(String name, Function<String, Integer> fn) {
-            return add(name, new JsFunction(
+            return add(
                     name,
-                    functions.size(),
-                    List.of(String.class),
-                    Integer.class,
-                    (args) -> {
-                        return fn.apply((String) args.get(0));
-                    }));
+                    new JsFunction(
+                            name,
+                            functions.size(),
+                            List.of(String.class),
+                            Integer.class,
+                            (args) -> {
+                                return fn.apply((String) args.get(0));
+                            }));
         }
 
         public Builtins build() {
