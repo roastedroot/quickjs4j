@@ -180,14 +180,15 @@ public final class ChicoryJs implements AutoCloseable {
     private String jsPrelude() {
         var preludeBuilder = new StringBuilder();
         // TODO: if this grows I need a JS writer something
+        // TODO: verify JSON.parse
         for (int i = 0; i < builtins.size(); i++) {
             var fun = builtins.byIndex(i);
             preludeBuilder.append(
                     "globalThis."
                             + fun.name()
-                            + " = (...args) => { return java_invoke("
+                            + " = (...args) => { return JSON.parse(java_invoke("
                             + fun.index()
-                            + ", JSON.stringify(args) ) };\n");
+                            + ", JSON.stringify(args) ) ) };\n");
         }
         return preludeBuilder.toString();
     }
