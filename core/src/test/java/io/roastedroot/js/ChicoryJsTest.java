@@ -114,7 +114,6 @@ public class ChicoryJsTest {
     String func6Called;
 
     String func6(String a) {
-        System.out.println("void -> String functionS " + a);
         func6Called = a;
         return "funcS" + a;
     }
