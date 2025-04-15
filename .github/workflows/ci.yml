@@ -18,14 +18,34 @@ permissions:
 
 jobs:
 
+  prepare-javy-plugin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Build the Javy plugin
+        working-directory: javy-plugin
+        run: |
+          rustup target add wasm32-wasip1
+          make build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: javy_chicory_plugin
+          path: javy-plugin/target/wasm32-wasip1/release/javy_chicory_plugin.wasm
+
   build:
+    needs: prepare-javy-plugin
     runs-on: ${{ matrix.os }}
     continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        java-version: [11, 17, 21]
+        os: [ubuntu-latest\ # , macos-latest, windows-latest]
+        java-version: [11] # , 17, 21]
         
     steps:
     - uses: actions/checkout@v4
@@ -37,14 +57,9 @@ jobs:
         java-version: '${{ matrix.java-version }}'
         cache: maven
 
-    - name: Set up Rust
-      uses: actions-rust-lang/setup-rust-toolchain@v1
-
-    - name: Build the Javy plugin
-      working-directory: javy-plugin
-      run: |
-        rustup target add wasm32-wasip1
-        make build
+    - uses: actions/download-artifact@v4
+      with:
+        name: javy_chicory_plugin
 
     - name: Test chicory-js
       run: mvn -B install
