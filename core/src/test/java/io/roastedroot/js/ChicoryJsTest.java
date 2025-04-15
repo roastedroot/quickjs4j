@@ -21,16 +21,17 @@ public class ChicoryJsTest {
     public void basicUsage() {
         // Arrange
         var invoked = new AtomicBoolean(false);
-        var chicoryJs =
-                ChicoryJs.builder()
-                        .withBuiltins(Builtins.builder().build())
-                        .withImportedFunction(
+        var builtins =
+                Builtins.builder()
+                        .addStringToString(
+                                "java_imported_function",
                                 (str) -> {
                                     assertEquals("ciao", str);
                                     invoked.set(true);
                                     return "{ received: " + str + " }";
                                 })
                         .build();
+        var chicoryJs = ChicoryJs.builder().withBuiltins(builtins).build();
 
         // Act
         var codePtr =
@@ -380,11 +381,12 @@ public class ChicoryJsTest {
                         .build();
         var chicoryJs = ChicoryJs.builder().withBuiltins(builtins).build();
 
-        var jsSource =
-                new String(
-                        ChicoryJsTest.class.getResourceAsStream("/zod/dist/out.js").readAllBytes(),
-                        StandardCharsets.UTF_8);
+        var jsSource = ChicoryJsTest.class.getResourceAsStream("/zod/dist/out.js").readAllBytes();
 
-        compileAndExec(chicoryJs, jsSource);
+        var codePtr = chicoryJs.compile(jsSource);
+        chicoryJs.exec(codePtr);
+        chicoryJs.free(codePtr);
+        chicoryJs.close();
+        // compileAndExec(chicoryJs, jsSource);
     }
 }

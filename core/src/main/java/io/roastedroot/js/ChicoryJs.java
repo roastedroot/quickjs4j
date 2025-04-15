@@ -36,42 +36,6 @@ public final class ChicoryJs implements AutoCloseable {
         return new Builder();
     }
 
-    private Function<String, String> importFun;
-
-    private long[] importedFunction(Instance instance, long[] args) {
-        int ptr = (int) args[0];
-        int len = (int) args[1];
-
-        var bytes = instance.memory().readBytes(ptr, len);
-        var str = new String(bytes);
-
-        var returnStr = this.importFun.apply(str);
-        var returnBytes = returnStr.getBytes();
-
-        var returnPtr =
-                exports.canonicalAbiRealloc(
-                        0, // original_ptr
-                        0, // original_size
-                        ALIGNMENT, // alignment
-                        returnBytes.length // new size
-                        );
-        exports.memory().write(returnPtr, returnBytes);
-
-        var LEN = 8;
-        var widePtr =
-                exports.canonicalAbiRealloc(
-                        0, // original_ptr
-                        0, // original_size
-                        ALIGNMENT, // alignment
-                        LEN // new size
-                        );
-
-        instance.memory().writeI32(widePtr, returnPtr);
-        instance.memory().writeI32(widePtr + 4, returnBytes.length);
-
-        return new long[] {widePtr};
-    }
-
     private long[] invoke(Instance instance, long[] args) {
         int proxyPtr = (int) args[0];
 
@@ -157,13 +121,10 @@ public final class ChicoryJs implements AutoCloseable {
         }
     }
 
-    private ChicoryJs(Function<String, String> importFun, Builtins builtins) {
+    private ChicoryJs(Builtins builtins) {
         // TODO: have proper DI here
         this.mapper = new ObjectMapper();
-        // this.mapper.configure(JsonParser.Feature.ALLOW_SINGLE_QUOTES, true);
-
         this.builtins = builtins;
-        this.importFun = importFun;
         instance =
                 Instance.builder(JavyPluginModule.load())
                         .withMemoryFactory(ByteArrayMemory::new)
@@ -171,13 +132,6 @@ public final class ChicoryJs implements AutoCloseable {
                         .withImportValues(
                                 ImportValues.builder()
                                         .addFunction(wasi.toHostFunctions())
-                                        .addFunction(
-                                                new HostFunction(
-                                                        "chicory",
-                                                        "imported_function",
-                                                        List.of(ValueType.I32, ValueType.I32),
-                                                        List.of(ValueType.I32),
-                                                        this::importedFunction))
                                         .addFunction(
                                                 new HostFunction(
                                                         "chicory",
@@ -195,7 +149,7 @@ public final class ChicoryJs implements AutoCloseable {
     }
 
     // This function is used to dynamically generate the bindings defined by the Builtins
-    private String jsPrelude() {
+    private byte[] jsPrelude() {
         var preludeBuilder = new StringBuilder();
         // TODO: if this grows I need a JS writer something
         // TODO: verify JSON.parse
@@ -208,11 +162,19 @@ public final class ChicoryJs implements AutoCloseable {
                             + fun.index()
                             + ", JSON.stringify(args) ) ) };\n");
         }
-        return preludeBuilder.toString();
+        return preludeBuilder.toString().getBytes();
     }
 
     public int compile(String js) {
-        byte[] jsCode = (jsPrelude() + js).getBytes(UTF_8);
+        return compile(js.getBytes(UTF_8));
+    }
+
+    public int compile(byte[] js) {
+        byte[] prelude = jsPrelude();
+        byte[] jsCode = new byte[prelude.length + js.length];
+        System.arraycopy(prelude, 0, jsCode, 0, prelude.length);
+        System.arraycopy(js, 0, jsCode, prelude.length, js.length);
+
         var ptr =
                 exports.canonicalAbiRealloc(
                         0, // original_ptr
@@ -223,6 +185,11 @@ public final class ChicoryJs implements AutoCloseable {
 
         exports.memory().write(ptr, jsCode);
         var aggregatedCodePtr = exports.compileSrc(ptr, jsCode.length);
+        exports.canonicalAbiFree(
+                ptr, // ptr
+                jsCode.length, // length
+                ALIGNMENT // alignement
+                );
 
         return exports.memory().readInt(aggregatedCodePtr); // 32 bit
     }
@@ -266,13 +233,8 @@ public final class ChicoryJs implements AutoCloseable {
             return this;
         }
 
-        public Builder withImportedFunction(Function<String, String> imprtFn) {
-            this.importedFunction = imprtFn;
-            return this;
-        }
-
         public ChicoryJs build() {
-            return new ChicoryJs(importedFunction, builtins);
+            return new ChicoryJs(builtins);
         }
     }
 }

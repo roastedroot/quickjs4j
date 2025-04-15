@@ -1,6 +1,6 @@
 {
     "scripts": {
-        "build": "esbuild index.ts --bundle --outfile=dist/out.js",
+        "build": "esbuild --charset=utf8 index.ts --bundle --outfile=dist/out.js",
         "clean": "rimraf dist node_modules"
     },
     "dependencies": {

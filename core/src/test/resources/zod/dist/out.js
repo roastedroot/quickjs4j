@@ -4061,8 +4061,8 @@
 
   // index.ts
   var mySchema = z.string();
-  var parseTuna = mySchema.safeParse("tuna");
-  var parseNumber = mySchema.safeParse(12);
-  java_check_tuna(parseTuna);
-  java_check_number(parseNumber);
+  var parsedTuna = mySchema.safeParse("tuna");
+  var parsedNumber = mySchema.safeParse(12);
+  java_check_tuna(parsedTuna);
+  java_check_number(parsedNumber);
 })();
