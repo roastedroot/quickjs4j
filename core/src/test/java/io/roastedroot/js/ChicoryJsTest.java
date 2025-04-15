@@ -1,9 +1,12 @@
 package io.roastedroot.js;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -272,5 +275,116 @@ public class ChicoryJsTest {
                 String.format(
                         "const user = getUser(\"%s\", \"%s\", %d);\n" + "checkUser(user);",
                         expectedUser.name, expectedUser.surname, expectedUser.age));
+    }
+
+    @Test
+    public void useBundledJS() throws Exception {
+        var myCow =
+                " ______________\n"
+                        + "< my Moooodule >\n"
+                        + " --------------\n"
+                        + "        \\   ^__^\n"
+                        + "         \\  (oo)\\_______\n"
+                        + "            (__)\\       )\\/\\\n"
+                        + "                ||----w |\n"
+                        + "                ||     ||";
+        var builtins =
+                Builtins.builder()
+                        .addVoidToString("java_text", () -> "my Moooodule")
+                        .addStringToVoid("java_check", (str) -> assertEquals(myCow, str))
+                        .build();
+        var chicoryJs = ChicoryJs.builder().withBuiltins(builtins).build();
+
+        var jsSource =
+                new String(
+                        ChicoryJsTest.class
+                                .getResourceAsStream("/cowsay/dist/out.js")
+                                .readAllBytes(),
+                        StandardCharsets.UTF_8);
+
+        compileAndExec(chicoryJs, jsSource);
+    }
+
+    public static class ZodResult {
+        @JsonProperty("success")
+        boolean success;
+
+        @JsonProperty("data")
+        String data;
+
+        @JsonProperty("error")
+        ZodError error;
+    }
+
+    public static class ZodError {
+        @JsonProperty("name")
+        String name;
+
+        @JsonProperty("issues")
+        ZodIssue[] issues;
+    }
+
+    public static class ZodIssue {
+        @JsonProperty("code")
+        String code;
+
+        @JsonProperty("path")
+        String[] path;
+
+        @JsonProperty("expected")
+        String expected;
+
+        @JsonProperty("received")
+        String received;
+
+        @JsonProperty("message")
+        String message;
+    }
+
+    @Test
+    public void useBundledTS() throws Exception {
+        var builtins =
+                Builtins.builder()
+                        .add(
+                                "java_check_tuna",
+                                new JsFunction(
+                                        "java_check_tuna",
+                                        0,
+                                        List.of(ZodResult.class),
+                                        Void.class,
+                                        (args) -> {
+                                            ZodResult res = (ZodResult) args.get(0);
+
+                                            assertTrue(res.success);
+                                            assertEquals("tuna", res.data);
+
+                                            return null;
+                                        }))
+                        .add(
+                                "java_check_number",
+                                new JsFunction(
+                                        "java_check_number",
+                                        1,
+                                        List.of(ZodResult.class),
+                                        Void.class,
+                                        (args) -> {
+                                            ZodResult res = (ZodResult) args.get(0);
+
+                                            assertFalse(res.success);
+                                            assertEquals("invalid_type", res.error.issues[0].code);
+                                            assertEquals("number", res.error.issues[0].received);
+                                            assertEquals("string", res.error.issues[0].expected);
+
+                                            return null;
+                                        }))
+                        .build();
+        var chicoryJs = ChicoryJs.builder().withBuiltins(builtins).build();
+
+        var jsSource =
+                new String(
+                        ChicoryJsTest.class.getResourceAsStream("/zod/dist/out.js").readAllBytes(),
+                        StandardCharsets.UTF_8);
+
+        compileAndExec(chicoryJs, jsSource);
     }
 }
