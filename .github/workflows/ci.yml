@@ -42,7 +42,9 @@ jobs:
 
     - name: Build the Javy plugin
       working-directory: javy-plugin
-      run: make build
+      run: |
+        rustup target add wasm32-wasip1
+        make build
 
     - name: Test chicory-js
       run: mvn -B install
