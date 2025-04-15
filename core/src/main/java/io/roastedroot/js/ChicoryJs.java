@@ -191,14 +191,15 @@ public final class ChicoryJs implements AutoCloseable {
                 ALIGNMENT // alignement
                 );
 
-        return exports.memory().readInt(aggregatedCodePtr); // 32 bit
+        return aggregatedCodePtr; // 32 bit
     }
 
     public void exec(int codePtr) {
+        var ptr = exports.memory().readInt(codePtr);
         var codeLength = exports.memory().readInt(codePtr + 4);
 
         exports.invoke(
-                codePtr, // bytecode_ptr
+                ptr, // bytecode_ptr
                 codeLength, // bytecode_len
                 0, // fn_name_ptr
                 0 // fn_name_len
@@ -206,13 +207,46 @@ public final class ChicoryJs implements AutoCloseable {
     }
 
     public void free(int codePtr) {
+        var ptr = exports.memory().readInt(codePtr);
         var codeLength = exports.memory().readInt(codePtr + 4);
 
         exports.canonicalAbiFree(
-                codePtr, // ptr
+                ptr, // ptr
                 codeLength, // length
                 ALIGNMENT // alignement
                 );
+    }
+
+    public byte[] readCompiled(int codePtr) {
+        var ptr = exports.memory().readInt(codePtr);
+        var codeLength = exports.memory().readInt(codePtr + 4);
+
+        return exports.memory().readBytes(ptr, codeLength);
+    }
+
+    public int writeCompiled(byte[] jsBytecode) {
+        var ptr =
+                exports.canonicalAbiRealloc(
+                        0, // original_ptr
+                        0, // original_size
+                        ALIGNMENT, // alignment
+                        8 // new size
+                        );
+
+        var codePtr =
+                exports.canonicalAbiRealloc(
+                        0, // original_ptr
+                        0, // original_size
+                        ALIGNMENT, // alignment
+                        jsBytecode.length // new size
+                        );
+
+        exports.memory().write(codePtr, jsBytecode);
+
+        exports.memory().writeI32(ptr, codePtr);
+        exports.memory().writeI32(ptr + 4, jsBytecode.length);
+
+        return ptr;
     }
 
     @Override
@@ -242,6 +276,9 @@ public final class ChicoryJs implements AutoCloseable {
         public ChicoryJs build() {
             if (mapper == null) {
                 mapper = DEFAULT_OBJECT_MAPPER;
+            }
+            if (builtins == null) {
+                builtins = Builtins.builder().build();
             }
             return new ChicoryJs(builtins, mapper);
         }

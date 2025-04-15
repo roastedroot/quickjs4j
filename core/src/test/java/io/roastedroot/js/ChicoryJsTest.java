@@ -387,6 +387,25 @@ public class ChicoryJsTest {
         chicoryJs.exec(codePtr);
         chicoryJs.free(codePtr);
         chicoryJs.close();
-        // compileAndExec(chicoryJs, jsSource);
+    }
+
+    @Test
+    public void cacheCompiledJS() throws Exception {
+        // Build QuickJs instance
+        var chicoryJs = ChicoryJs.builder().build();
+
+        var jsSource = "console.log(\"hello world!\")";
+        var codePtr = chicoryJs.compile(jsSource);
+
+        var jsBytecode = chicoryJs.readCompiled(codePtr);
+        chicoryJs.free(codePtr);
+        chicoryJs.close();
+
+        // Runtime QuickJs instance
+        var runtimeChicoryJs = ChicoryJs.builder().build();
+        var runtimeCodePtr = runtimeChicoryJs.writeCompiled(jsBytecode);
+        runtimeChicoryJs.exec(runtimeCodePtr);
+        runtimeChicoryJs.free(runtimeCodePtr);
+        runtimeChicoryJs.close();
     }
 }
