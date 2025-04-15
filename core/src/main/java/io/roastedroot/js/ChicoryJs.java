@@ -21,6 +21,7 @@ import java.util.stream.Collectors;
 @WasmModuleInterface(WasmResource.absoluteFile)
 public final class ChicoryJs implements AutoCloseable {
     private static final int ALIGNMENT = 1;
+    public static final ObjectMapper DEFAULT_OBJECT_MAPPER = new ObjectMapper();
 
     private final WasiOptions wasiOpts = WasiOptions.builder().inheritSystem().build();
     private final WasiPreview1 wasi = WasiPreview1.builder().withOptions(wasiOpts).build();
@@ -121,9 +122,8 @@ public final class ChicoryJs implements AutoCloseable {
         }
     }
 
-    private ChicoryJs(Builtins builtins) {
-        // TODO: have proper DI here
-        this.mapper = new ObjectMapper();
+    private ChicoryJs(Builtins builtins, ObjectMapper mapper) {
+        this.mapper = mapper;
         this.builtins = builtins;
         instance =
                 Instance.builder(JavyPluginModule.load())
@@ -224,6 +224,7 @@ public final class ChicoryJs implements AutoCloseable {
 
     public static final class Builder {
         private Builtins builtins;
+        private ObjectMapper mapper;
         private Function<String, String> importedFunction;
 
         private Builder() {}
@@ -233,8 +234,16 @@ public final class ChicoryJs implements AutoCloseable {
             return this;
         }
 
+        public Builder withObjectMapper(ObjectMapper mapper) {
+            this.mapper = mapper;
+            return this;
+        }
+
         public ChicoryJs build() {
-            return new ChicoryJs(builtins);
+            if (mapper == null) {
+                mapper = DEFAULT_OBJECT_MAPPER;
+            }
+            return new ChicoryJs(builtins, mapper);
         }
     }
 }

@@ -86,7 +86,7 @@
             </goals>
             <configuration>
               <name>io.roastedroot.js.JavyPlugin</name>
-              <wasmFile>../javy-plugin/target/wasm32-wasip1/release/javy_chicory_plugin.wasm</wasmFile>
+              <wasmFile>../javy_chicory_plugin.wasm</wasmFile>
             </configuration>
           </execution>
         </executions>

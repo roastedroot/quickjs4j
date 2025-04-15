@@ -4,8 +4,6 @@ import java.util.List;
 import java.util.function.Function;
 
 public class JsFunction {
-    // function description
-
     // TODO: check if both name and index are useful
     private final String name;
     private final int index;
