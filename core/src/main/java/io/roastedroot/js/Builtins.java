@@ -43,6 +43,7 @@ public final class Builtins {
         public Builder add(String name, JsFunction fun) {
             // Early verify the order?
             // TODO: check if someone might want to leave holes
+            assert(name == fun.name());
             assert (fun.index() == functions.size());
             functions.add(fun);
             return this;

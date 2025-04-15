@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -164,7 +165,32 @@ public class ChicoryJsTest {
         assertThrows(AssertionFailedError.class, () -> compileAndExec(chicoryJs, "check(func4());"));
     }
 
-    // TODO: write a test to verify mixed types of args/returns
+    @Test
+    public void callJavaFunctionsWithMixedParameters() {
+        var expectedX = 123;
+        var expectedY = "hello my world";
+        var expectedZ = 321;
+        var builtins =
+                Builtins.builder()
+                        .add("myFunc", new JsFunction(
+                                "myFunc", 0, List.of(Integer.class, String.class, Integer.class), Void.class,
+                                (args) -> {
+                                    var x = (Integer) args.get(0);
+                                    var y = (String) args.get(1);
+                                    var z = (Integer) args.get(2);
+
+                                    assertEquals(expectedX, x);
+                                    assertEquals(expectedY, y);
+                                    assertEquals(expectedZ, z);
+                                    return null;
+                                }
+                        ))
+                        .build();
+
+        var chicoryJs = ChicoryJs.builder().withBuiltins(builtins).build();
+
+        compileAndExec(chicoryJs, String.format("myFunc(%d, \"%s\", %d);", expectedX, expectedY, expectedZ));
+    }
 
     // TODO: verify if we need to invoke functions on objects passed as proxies?
 }
