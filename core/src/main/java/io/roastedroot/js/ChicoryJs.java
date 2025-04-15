@@ -20,6 +20,8 @@ import java.util.stream.Collectors;
 
 @WasmModuleInterface(WasmResource.absoluteFile)
 public final class ChicoryJs implements AutoCloseable {
+    private static final int ALIGNMENT = 1;
+
     private final WasiOptions wasiOpts = WasiOptions.builder().inheritSystem().build();
     private final WasiPreview1 wasi = WasiPreview1.builder().withOptions(wasiOpts).build();
     private final Instance instance;
@@ -28,7 +30,7 @@ public final class ChicoryJs implements AutoCloseable {
     private final Builtins builtins;
     private final ObjectMapper mapper;
 
-    private static final int ALIGNMENT = 1;
+    private final List<Object> javaRefs = new ArrayList<>();
 
     public static Builder builder() {
         return new Builder();
@@ -104,12 +106,28 @@ public final class ChicoryJs implements AutoCloseable {
                 var clazz = receiver.paramTypes().get(i);
                 var value = tree.get(i);
 
-                argsList.add(mapper.treeToValue(value, clazz));
+                if (clazz == JavaRef.class) {
+                    argsList.add(javaRefs.get(value.intValue()));
+                } else {
+                    argsList.add(mapper.treeToValue(value, clazz));
+                }
             }
 
             var res = receiver.invoke(argsList);
 
-            var returnStr = mapper.writerFor(receiver.returnType()).writeValueAsString(res);
+            // Converting Java references into pointers for JS
+            var returnType = receiver.returnType();
+            if (returnType == JavaRef.class) {
+                returnType = Integer.class;
+                if (res instanceof JavaRef) {
+                    res = ((JavaRef) res).pointer();
+                } else {
+                    javaRefs.add(res);
+                    res = javaRefs.size() - 1;
+                }
+            }
+
+            var returnStr = mapper.writerFor(returnType).writeValueAsString(res);
             var returnBytes = returnStr.getBytes();
 
             var returnPtr =

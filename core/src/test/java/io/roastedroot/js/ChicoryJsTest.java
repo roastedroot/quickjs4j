@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -162,7 +163,8 @@ public class ChicoryJsTest {
 
         // negative - needs to be last as the runtime needs a restart after exception
         toCheck.set("myFunc");
-        assertThrows(AssertionFailedError.class, () -> compileAndExec(chicoryJs, "check(func4());"));
+        assertThrows(
+                AssertionFailedError.class, () -> compileAndExec(chicoryJs, "check(func4());"));
     }
 
     @Test
@@ -172,25 +174,103 @@ public class ChicoryJsTest {
         var expectedZ = 321;
         var builtins =
                 Builtins.builder()
-                        .add("myFunc", new JsFunction(
-                                "myFunc", 0, List.of(Integer.class, String.class, Integer.class), Void.class,
-                                (args) -> {
-                                    var x = (Integer) args.get(0);
-                                    var y = (String) args.get(1);
-                                    var z = (Integer) args.get(2);
+                        .add(
+                                "myFunc",
+                                new JsFunction(
+                                        "myFunc",
+                                        0,
+                                        List.of(Integer.class, String.class, Integer.class),
+                                        Void.class,
+                                        (args) -> {
+                                            var x = (Integer) args.get(0);
+                                            var y = (String) args.get(1);
+                                            var z = (Integer) args.get(2);
 
-                                    assertEquals(expectedX, x);
-                                    assertEquals(expectedY, y);
-                                    assertEquals(expectedZ, z);
-                                    return null;
-                                }
-                        ))
+                                            assertEquals(expectedX, x);
+                                            assertEquals(expectedY, y);
+                                            assertEquals(expectedZ, z);
+                                            return null;
+                                        }))
                         .build();
 
         var chicoryJs = ChicoryJs.builder().withBuiltins(builtins).build();
 
-        compileAndExec(chicoryJs, String.format("myFunc(%d, \"%s\", %d);", expectedX, expectedY, expectedZ));
+        compileAndExec(
+                chicoryJs,
+                String.format("myFunc(%d, \"%s\", %d);", expectedX, expectedY, expectedZ));
     }
 
-    // TODO: verify if we need to invoke functions on objects passed as proxies?
+    private static class User {
+        final String name;
+        final String surname;
+        final int age;
+
+        public User(String name, String surname, int age) {
+            this.name = name;
+            this.surname = surname;
+            this.age = age;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (!(o instanceof User)) {
+                return false;
+            }
+            User user = (User) o;
+            return age == user.age
+                    && Objects.equals(name, user.name)
+                    && Objects.equals(surname, user.surname);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(name, surname, age);
+        }
+    }
+
+    @Test
+    public void callJavaFunctionsUsingJavaRefs() {
+        var expectedUser = new User("alice", "bobstrom", 23);
+        var builtins =
+                Builtins.builder()
+                        .add(
+                                "getUser",
+                                new JsFunction(
+                                        "getUser",
+                                        0,
+                                        List.of(String.class, String.class, Integer.class),
+                                        JavaRef.class,
+                                        (args) -> {
+                                            var name = (String) args.get(0);
+                                            var surname = (String) args.get(1);
+                                            var age = (Integer) args.get(2);
+
+                                            return new User(name, surname, age);
+                                        }))
+                        .add(
+                                "checkUser",
+                                new JsFunction(
+                                        "checkUser",
+                                        1,
+                                        List.of(JavaRef.class),
+                                        Void.class,
+                                        (args) -> {
+                                            var user = (User) args.get(0);
+
+                                            assertEquals(expectedUser, user);
+                                            return null;
+                                        }))
+                        .build();
+
+        var chicoryJs = ChicoryJs.builder().withBuiltins(builtins).build();
+
+        compileAndExec(
+                chicoryJs,
+                String.format(
+                        "const user = getUser(\"%s\", \"%s\", %d);\n" + "checkUser(user);",
+                        expectedUser.name, expectedUser.surname, expectedUser.age));
+    }
 }
