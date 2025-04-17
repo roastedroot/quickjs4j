@@ -19,7 +19,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @WasmModuleInterface(WasmResource.absoluteFile)
-public final class ChicoryJs implements AutoCloseable {
+public final class JsRunner implements AutoCloseable {
     private static final int ALIGNMENT = 1;
     public static final ObjectMapper DEFAULT_OBJECT_MAPPER = new ObjectMapper();
 
@@ -122,7 +122,7 @@ public final class ChicoryJs implements AutoCloseable {
         }
     }
 
-    private ChicoryJs(Builtins builtins, ObjectMapper mapper) {
+    private JsRunner(Builtins builtins, ObjectMapper mapper) {
         this.mapper = mapper;
         this.builtins = builtins;
         instance =
@@ -273,14 +273,14 @@ public final class ChicoryJs implements AutoCloseable {
             return this;
         }
 
-        public ChicoryJs build() {
+        public JsRunner build() {
             if (mapper == null) {
                 mapper = DEFAULT_OBJECT_MAPPER;
             }
             if (builtins == null) {
                 builtins = Builtins.builder().build();
             }
-            return new ChicoryJs(builtins, mapper);
+            return new JsRunner(builtins, mapper);
         }
     }
 }
