@@ -19,14 +19,14 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @WasmModuleInterface(WasmResource.absoluteFile)
-public final class JsRunner implements AutoCloseable {
+public final class JsEngine implements AutoCloseable {
     private static final int ALIGNMENT = 1;
     public static final ObjectMapper DEFAULT_OBJECT_MAPPER = new ObjectMapper();
 
     private final WasiOptions wasiOpts = WasiOptions.builder().inheritSystem().build();
     private final WasiPreview1 wasi = WasiPreview1.builder().withOptions(wasiOpts).build();
     private final Instance instance;
-    private final ChicoryJs_ModuleExports exports;
+    private final JsEngine_ModuleExports exports;
 
     private final Builtins builtins;
     private final ObjectMapper mapper;
@@ -122,7 +122,7 @@ public final class JsRunner implements AutoCloseable {
         }
     }
 
-    private JsRunner(Builtins builtins, ObjectMapper mapper) {
+    private JsEngine(Builtins builtins, ObjectMapper mapper) {
         this.mapper = mapper;
         this.builtins = builtins;
         instance =
@@ -144,7 +144,7 @@ public final class JsRunner implements AutoCloseable {
                                                         this::invoke))
                                         .build())
                         .build();
-        exports = new ChicoryJs_ModuleExports(instance);
+        exports = new JsEngine_ModuleExports(instance);
         exports.initializeRuntime();
     }
 
@@ -273,14 +273,14 @@ public final class JsRunner implements AutoCloseable {
             return this;
         }
 
-        public JsRunner build() {
+        public JsEngine build() {
             if (mapper == null) {
                 mapper = DEFAULT_OBJECT_MAPPER;
             }
             if (builtins == null) {
                 builtins = Builtins.builder().build();
             }
-            return new JsRunner(builtins, mapper);
+            return new JsEngine(builtins, mapper);
         }
     }
 }
