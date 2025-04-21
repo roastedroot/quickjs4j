@@ -20,7 +20,10 @@
   </licenses>
 
   <modules>
+    <module>annotations</module>
     <module>core</module>
+    <module>it</module>
+    <module>processor</module>
   </modules>
 
   <properties>
@@ -38,10 +41,11 @@
     <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
     <spotless-maven-plugin.version>2.44.3</spotless-maven-plugin.version>
     <templating-maven-plugin.version>3.0.0</templating-maven-plugin.version>
-    <maven.compiler.version>3.14.0</maven.compiler.version>
-    <compiler-plugin.version>${maven.compiler.version}</compiler-plugin.version>
+    <maven-compiler-plugin.version>3.14.0</maven-compiler-plugin.version>
     <surefire-plugin.version>3.5.2</surefire-plugin.version>
     <failsafe-plugin.version>${surefire-plugin.version}</failsafe-plugin.version>
+    <maven-invoker-plugin.version>3.9.0</maven-invoker-plugin.version>
+    <maven-failsafe-plugin.version>3.5.3</maven-failsafe-plugin.version>
 
     <!-- test time versions -->
     <junit.version>5.12.0</junit.version>
@@ -49,6 +53,7 @@
     <!-- runtime versions -->
     <chicory.version>1.2.1</chicory.version>
     <jackson.version>2.18.3</jackson.version>
+    <javaparser.version>3.26.4</javaparser.version>
   </properties>
 
   <build>
@@ -192,7 +197,7 @@
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-compiler-plugin</artifactId>
-          <version>${maven.compiler.version}</version>
+          <version>${maven-compiler-plugin.version}</version>
           <configuration>
             <parameters>true</parameters>
             <release>11</release>
