@@ -41,6 +41,8 @@ It simplifies this by letting you bind top-level Java functions, making them eas
 import io.roastedroot.quickjs4j.core.Builtins;
 import io.roastedroot.quickjs4j.core.Engine;
 import io.roastedroot.quickjs4j.core.Runner;
+import io.roastedroot.quickjs4j.annotations.HostFunction;
+import io.roastedroot.quickjs4j.annotations.JsModule;
 
 @JsModule()
 class MyJsTestModule implements AutoCloseable {
@@ -111,6 +113,9 @@ At times is useful to pass to the JavaScript environment a reference to a Java o
 You can do it by using `HostRef`s, when using annotations it looks like the following:
 
 ```java
+import io.roastedroot.quickjs4j.annotations.HostRefParam;
+import io.roastedroot.quickjs4j.annotations.ReturnsHostRef;
+
 @ReturnsHostRef
 @HostFunction("my_java_ref")
 public String myRef() {
