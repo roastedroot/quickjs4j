@@ -31,9 +31,10 @@ import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.printer.DefaultPrettyPrinter;
 import com.github.javaparser.printer.configuration.DefaultConfigurationOption;
 import com.github.javaparser.printer.configuration.DefaultPrinterConfiguration;
-import io.roastedroot.js.annotations.JavaRef;
+import io.roastedroot.js.annotations.JavaRefParam;
 import io.roastedroot.js.annotations.JsFunction;
 import io.roastedroot.js.annotations.JsModule;
+import io.roastedroot.js.annotations.ReturningJavaRef;
 import java.io.IOException;
 import java.io.Writer;
 import java.lang.annotation.Annotation;
@@ -195,9 +196,9 @@ public final class JsModuleProcessor extends AbstractProcessor {
                 default:
                     var typeLiteral = parameter.asType().toString();
                     var type = parseType(parameter.asType().toString());
-                    if (annotatedWith(parameter, JavaRef.class)) {
-                        var javaRefType = parseType("io.roastedroot.js.JavaRef");
-                        paramTypes.add(new FieldAccessExpr(new NameExpr(typeLiteral), "class"));
+                    if (annotatedWith(parameter, JavaRefParam.class)) {
+                        var javaRefType = "io.roastedroot.js.JavaRef";
+                        paramTypes.add(new FieldAccessExpr(new NameExpr(javaRefType), "class"));
                         arguments.add(new CastExpr(type, argExpr));
                     } else {
                         paramTypes.add(new FieldAccessExpr(new NameExpr(typeLiteral), "class"));
@@ -220,8 +221,13 @@ public final class JsModuleProcessor extends AbstractProcessor {
                 hasReturn = true;
                 break;
             default:
-                returnType = new FieldAccessExpr(new NameExpr(returnName), "class");
                 hasReturn = true;
+                if (annotatedWith(executable, ReturningJavaRef.class)) {
+                    var javaRefType = "io.roastedroot.js.JavaRef";
+                    returnType = new FieldAccessExpr(new NameExpr(javaRefType), "class");
+                } else {
+                    returnType = new FieldAccessExpr(new NameExpr(returnName), "class");
+                }
                 break;
         }
 

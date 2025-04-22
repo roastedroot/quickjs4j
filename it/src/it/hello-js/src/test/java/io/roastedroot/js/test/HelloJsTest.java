@@ -6,8 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.roastedroot.js.Builtins;
 import io.roastedroot.js.JsEngine;
 import io.roastedroot.js.JsMachine;
+import io.roastedroot.js.annotations.JavaRefParam;
 import io.roastedroot.js.annotations.JsFunction;
 import io.roastedroot.js.annotations.JsModule;
+import io.roastedroot.js.annotations.ReturningJavaRef;
 import org.junit.jupiter.api.Test;
 
 class HelloJsTest {
@@ -15,6 +17,7 @@ class HelloJsTest {
     @JsModule()
     class JsTestModule {
         private boolean invoked;
+        private boolean refInvoked;
         private final JsMachine machine;
 
         JsTestModule() {
@@ -35,6 +38,18 @@ class HelloJsTest {
             assertEquals("hello 42", value);
         }
 
+        @ReturningJavaRef
+        @JsFunction("my_java_ref")
+        public String myRef() {
+            return "a pure java string";
+        }
+
+        @JsFunction("my_java_ref_check")
+        public void myRefCheck(@JavaRefParam String value) {
+            refInvoked = true;
+            assertEquals("a pure java string", value);
+        }
+
         public void exec(String code) {
             machine.compileAndExec(code);
         }
@@ -42,10 +57,14 @@ class HelloJsTest {
         public boolean isInvoked() {
             return invoked;
         }
+
+        public boolean isRefInvoked() {
+            return refInvoked;
+        }
     }
 
     @Test
-    public void helloWasiModule() {
+    public void helloJsModule() {
         // Arrange
         var helloJsModule = new JsTestModule();
 
@@ -54,5 +73,17 @@ class HelloJsTest {
 
         // Assert
         assertTrue(helloJsModule.isInvoked());
+    }
+
+    @Test
+    public void useJavaRefs() {
+        // Arrange
+        var helloJsModule = new JsTestModule();
+
+        // Act
+        helloJsModule.exec("my_java_ref_check(my_java_ref());");
+
+        // assert
+        assertTrue(helloJsModule.isRefInvoked());
     }
 }
