@@ -1,12 +1,12 @@
-package io.roastedroot.js;
+package io.roastedroot.quickjs4j.core;
 
 import java.util.Objects;
 
-public final class JavaRef {
+public final class HostRef {
     private final int ptr;
     private final Object ref;
 
-    private JavaRef(int ptr, Object ref) {
+    private HostRef(int ptr, Object ref) {
         this.ptr = ptr;
         this.ref = ref;
     }
@@ -24,11 +24,11 @@ public final class JavaRef {
         if (this == o) {
             return true;
         }
-        if (!(o instanceof JavaRef)) {
+        if (!(o instanceof HostRef)) {
             return false;
         }
-        JavaRef javaRef = (JavaRef) o;
-        return ptr == javaRef.ptr && Objects.equals(ref, javaRef.ref);
+        HostRef ref = (HostRef) o;
+        return ptr == ref.ptr && Objects.equals(ref, ref.ref);
     }
 
     @Override

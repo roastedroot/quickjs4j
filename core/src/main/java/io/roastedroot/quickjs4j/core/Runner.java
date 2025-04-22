@@ -1,4 +1,4 @@
-package io.roastedroot.js;
+package io.roastedroot.quickjs4j.core;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -11,15 +11,15 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-public final class JsMachine implements AutoCloseable {
+public final class Runner implements AutoCloseable {
     private final Map<String, byte[]> cache = new HashMap<>();
     private final MessageDigest md;
     private final int timeoutMs;
-    private final JsEngine engine;
+    private final Engine engine;
 
     private final ExecutorService es;
 
-    private JsMachine(MessageDigest md, JsEngine engine, int timeout) {
+    private Runner(MessageDigest md, Engine engine, int timeout) {
         this.md = md;
         this.engine = engine;
         this.es = Executors.newSingleThreadExecutor();
@@ -88,7 +88,7 @@ public final class JsMachine implements AutoCloseable {
 
     public static class Builder {
         private MessageDigest md;
-        private JsEngine engine;
+        private Engine engine;
         private int timeout = -1;
 
         public Builder withMessageDigest(MessageDigest md) {
@@ -96,7 +96,7 @@ public final class JsMachine implements AutoCloseable {
             return this;
         }
 
-        public Builder withEngine(JsEngine engine) {
+        public Builder withEngine(Engine engine) {
             this.engine = engine;
             return this;
         }
@@ -106,7 +106,7 @@ public final class JsMachine implements AutoCloseable {
             return this;
         }
 
-        public JsMachine build() {
+        public Runner build() {
             if (this.md == null) {
                 try {
                     this.md = MessageDigest.getInstance("MD5");
@@ -115,9 +115,9 @@ public final class JsMachine implements AutoCloseable {
                 }
             }
             if (this.engine == null) {
-                this.engine = JsEngine.builder().build();
+                this.engine = Engine.builder().build();
             }
-            return new JsMachine(this.md, this.engine, this.timeout);
+            return new Runner(this.md, this.engine, this.timeout);
         }
     }
 }

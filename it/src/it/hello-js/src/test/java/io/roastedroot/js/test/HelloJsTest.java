@@ -3,13 +3,13 @@ package chicory.test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.roastedroot.js.Builtins;
-import io.roastedroot.js.JsEngine;
-import io.roastedroot.js.JsMachine;
-import io.roastedroot.js.annotations.JavaRefParam;
-import io.roastedroot.js.annotations.JsFunction;
-import io.roastedroot.js.annotations.JsModule;
-import io.roastedroot.js.annotations.ReturningJavaRef;
+import io.roastedroot.quickjs4j.annotations.HostFunction;
+import io.roastedroot.quickjs4j.annotations.HostRefParam;
+import io.roastedroot.quickjs4j.annotations.JsModule;
+import io.roastedroot.quickjs4j.annotations.ReturnsHostRef;
+import io.roastedroot.quickjs4j.core.Builtins;
+import io.roastedroot.quickjs4j.core.Engine;
+import io.roastedroot.quickjs4j.core.Runner;
 import org.junit.jupiter.api.Test;
 
 class HelloJsTest {
@@ -18,40 +18,40 @@ class HelloJsTest {
     class JsTestModule {
         private boolean invoked;
         private boolean refInvoked;
-        private final JsMachine machine;
+        private final Runner runner;
 
         JsTestModule() {
             var builtins = Builtins.builder().add(JsTestModule_Builtins.toBuiltins(this)).build();
-            var engine = JsEngine.builder().withBuiltins(builtins).build();
-            this.machine = JsMachine.builder().withEngine(engine).build();
+            var engine = Engine.builder().withBuiltins(builtins).build();
+            this.runner = Runner.builder().withEngine(engine).build();
         }
 
-        @JsFunction("my_java_func")
+        @HostFunction("my_java_func")
         public String add(int x, int y) {
             var sum = x + y;
             return "hello " + sum;
         }
 
-        @JsFunction("my_java_check")
+        @HostFunction("my_java_check")
         public void check(String value) {
             invoked = true;
             assertEquals("hello 42", value);
         }
 
-        @ReturningJavaRef
-        @JsFunction("my_java_ref")
+        @ReturnsHostRef
+        @HostFunction("my_java_ref")
         public String myRef() {
             return "a pure java string";
         }
 
-        @JsFunction("my_java_ref_check")
-        public void myRefCheck(@JavaRefParam String value) {
+        @HostFunction("my_java_ref_check")
+        public void myRefCheck(@HostRefParam String value) {
             refInvoked = true;
             assertEquals("a pure java string", value);
         }
 
         public void exec(String code) {
-            machine.compileAndExec(code);
+            runner.compileAndExec(code);
         }
 
         public boolean isInvoked() {

@@ -1,4 +1,4 @@
-package io.roastedroot.js;
+package io.roastedroot.quickjs4j.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -8,7 +8,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 
-public class JsMachineTest {
+public class RunnerTest {
 
     @Test
     public void basicUsage() {
@@ -23,31 +23,38 @@ public class JsMachineTest {
                                     invoked.set(true);
                                 })
                         .build();
-        var jsEngine = JsEngine.builder().withBuiltins(builtins).build();
-        var machine = JsMachine.builder().withEngine(jsEngine).build();
+        var jsEngine = Engine.builder().withBuiltins(builtins).build();
+        var runner = Runner.builder().withEngine(jsEngine).build();
 
         // Act
-        machine.compileAndExec("java_check(42);");
+        runner.compileAndExec("java_check(42);");
 
         // Assert
         assertTrue(invoked.get());
 
-        machine.close();
+        runner.close();
+    }
+
+    @Test
+    public void minimalDocsExample() {
+        try (var runner = Runner.builder().build()) {
+            runner.compileAndExec("console.log(\"Hello QuickJs4J!\");");
+        }
     }
 
     @Test
     public void withTimeout() {
         // Arrange
-        var machine = JsMachine.builder().withTimeoutMs(500).build();
+        var runner = Runner.builder().withTimeoutMs(500).build();
 
         // Act
         var ex =
                 assertThrows(
-                        RuntimeException.class, () -> machine.compileAndExec("while (true) { };"));
+                        RuntimeException.class, () -> runner.compileAndExec("while (true) { };"));
 
         // Assert
         assertTrue(ex.getCause() instanceof TimeoutException);
 
-        machine.close();
+        runner.close();
     }
 }

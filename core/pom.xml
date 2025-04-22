@@ -4,14 +4,14 @@
 
   <parent>
     <groupId>io.roastedroot</groupId>
-    <artifactId>chicory-js-parent</artifactId>
+    <artifactId>quickjs4j-parent</artifactId>
     <version>999-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
 
-  <artifactId>chicory-js</artifactId>
+  <artifactId>quickjs4j</artifactId>
   <packaging>jar</packaging>
-  <name>Chicory JS integration leveraging Javy</name>
+  <name>QuickJs4J integration leveraging Javy</name>
 
   <dependencies>
     <dependency>
@@ -86,8 +86,8 @@
               <goal>wasm-aot-gen</goal>
             </goals>
             <configuration>
-              <name>io.roastedroot.js.JavyPlugin</name>
-              <wasmFile>../javy_chicory_plugin.wasm</wasmFile>
+              <name>io.roastedroot.quickjs4j.core.JavyPlugin</name>
+              <wasmFile>../javy_quickjs4j_plugin.wasm</wasmFile>
             </configuration>
           </execution>
         </executions>

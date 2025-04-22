@@ -4,14 +4,14 @@
 
   <parent>
     <groupId>io.roastedroot</groupId>
-    <artifactId>chicory-js-parent</artifactId>
+    <artifactId>quickjs4j-parent</artifactId>
     <version>999-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
 
-  <artifactId>chicory-js-annotations</artifactId>
+  <artifactId>quickjs4j-annotations</artifactId>
   <packaging>jar</packaging>
-  <name>Chicory JS - Annotations</name>
+  <name>QuickJs4J - Annotations</name>
   <description>Experimental annotations for exposing Java functions to JS</description>
 
 </project>

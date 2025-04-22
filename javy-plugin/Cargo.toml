@@ -1,9 +1,9 @@
 [package]
-name = "javy-chicory-plugin"
+name = "javy-quickjs4j-plugin"
 version = "0.1.0"
 
 [lib]
-name = "javy_chicory_plugin"
+name = "javy_quickjs4j_plugin"
 crate-type = ["cdylib"]
 
 [dependencies]

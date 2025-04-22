@@ -3,12 +3,12 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>io.roastedroot</groupId>
-  <artifactId>chicory-js-parent</artifactId>
+  <artifactId>quickjs4j-parent</artifactId>
   <version>999-SNAPSHOT</version>
   <packaging>pom</packaging>
 
-  <name>chicory-js-parent</name>
-  <url>https://github.com/roastedroot/chicory-js/</url>
+  <name>quickjs4j-parent</name>
+  <url>https://github.com/roastedroot/quickjs4j/</url>
 
   <licenses>
     <license>

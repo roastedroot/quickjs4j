@@ -34,8 +34,8 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: javy_chicory_plugin
-          path: javy-plugin/target/wasm32-wasip1/release/javy_chicory_plugin.wasm
+          name: javy_quickjs4j_plugin
+          path: javy-plugin/target/wasm32-wasip1/release/javy_quickjs4j_plugin.wasm
 
   build:
     needs: prepare-javy-plugin
@@ -61,9 +61,9 @@ jobs:
 
     - uses: actions/download-artifact@v4
       with:
-        name: javy_chicory_plugin
+        name: javy_quickjs4j_plugin
 
-    - name: Test chicory-js
+    - name: Test quickjs4j
       run: mvn -B install
 
     - name: Publish Test Report

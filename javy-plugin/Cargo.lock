@@ -208,13 +208,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "javy-chicory-plugin"
-version = "0.1.0"
-dependencies = [
- "javy-plugin-api",
-]
-
-[[package]]
 name = "javy-plugin-api"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -222,6 +215,13 @@ checksum = "02a6b861e6a7546b5b79b440b8b940609ee95af2c2b30e666ec541ea22936d88"
 dependencies = [
  "anyhow",
  "javy",
+]
+
+[[package]]
+name = "javy-quickjs4j-plugin"
+version = "0.1.0"
+dependencies = [
+ "javy-plugin-api",
 ]
 
 [[package]]

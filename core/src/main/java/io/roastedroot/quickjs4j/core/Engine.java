@@ -1,4 +1,4 @@
-package io.roastedroot.js;
+package io.roastedroot.quickjs4j.core;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
@@ -7,9 +7,11 @@ import com.dylibso.chicory.runtime.ByteArrayMemory;
 import com.dylibso.chicory.runtime.HostFunction;
 import com.dylibso.chicory.runtime.ImportValues;
 import com.dylibso.chicory.runtime.Instance;
+import com.dylibso.chicory.runtime.Memory;
 import com.dylibso.chicory.runtime.TrapException;
 import com.dylibso.chicory.wasi.WasiOptions;
 import com.dylibso.chicory.wasi.WasiPreview1;
+import com.dylibso.chicory.wasm.types.MemoryLimits;
 import com.dylibso.chicory.wasm.types.ValueType;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -20,14 +22,14 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @WasmModuleInterface(WasmResource.absoluteFile)
-public final class JsEngine implements AutoCloseable {
+public final class Engine implements AutoCloseable {
     private static final int ALIGNMENT = 1;
     public static final ObjectMapper DEFAULT_OBJECT_MAPPER = new ObjectMapper();
 
     private final WasiOptions wasiOpts = WasiOptions.builder().inheritSystem().build();
     private final WasiPreview1 wasi = WasiPreview1.builder().withOptions(wasiOpts).build();
     private final Instance instance;
-    private final JsEngine_ModuleExports exports;
+    private final Engine_ModuleExports exports;
 
     private final Builtins builtins;
     private final ObjectMapper mapper;
@@ -72,7 +74,7 @@ public final class JsEngine implements AutoCloseable {
                 var clazz = receiver.paramTypes().get(i);
                 var value = tree.get(i);
 
-                if (clazz == JavaRef.class) {
+                if (clazz == HostRef.class) {
                     argsList.add(javaRefs.get(value.intValue()));
                 } else {
                     argsList.add(mapper.treeToValue(value, clazz));
@@ -83,10 +85,10 @@ public final class JsEngine implements AutoCloseable {
 
             // Converting Java references into pointers for JS
             var returnType = receiver.returnType();
-            if (returnType == JavaRef.class) {
+            if (returnType == HostRef.class) {
                 returnType = Integer.class;
-                if (res instanceof JavaRef) {
-                    res = ((JavaRef) res).pointer();
+                if (res instanceof HostRef) {
+                    res = ((HostRef) res).pointer();
                 } else {
                     javaRefs.add(res);
                     res = javaRefs.size() - 1;
@@ -123,29 +125,29 @@ public final class JsEngine implements AutoCloseable {
         }
     }
 
-    private JsEngine(Builtins builtins, ObjectMapper mapper) {
+    private final HostFunction invokeFn =
+            new HostFunction(
+                    "chicory",
+                    "invoke",
+                    List.of(ValueType.I32, ValueType.I32, ValueType.I32),
+                    List.of(ValueType.I32),
+                    this::invoke);
+
+    private Engine(
+            Builtins builtins, ObjectMapper mapper, Function<MemoryLimits, Memory> memoryFactory) {
         this.mapper = mapper;
         this.builtins = builtins;
         instance =
                 Instance.builder(JavyPluginModule.load())
-                        .withMemoryFactory(ByteArrayMemory::new)
+                        .withMemoryFactory(memoryFactory)
                         .withMachineFactory(JavyPluginModule::create)
                         .withImportValues(
                                 ImportValues.builder()
                                         .addFunction(wasi.toHostFunctions())
-                                        .addFunction(
-                                                new HostFunction(
-                                                        "chicory",
-                                                        "invoke",
-                                                        List.of(
-                                                                ValueType.I32,
-                                                                ValueType.I32,
-                                                                ValueType.I32),
-                                                        List.of(ValueType.I32),
-                                                        this::invoke))
+                                        .addFunction(invokeFn)
                                         .build())
                         .build();
-        exports = new JsEngine_ModuleExports(instance);
+        exports = new Engine_ModuleExports(instance);
         exports.initializeRuntime();
     }
 
@@ -265,7 +267,7 @@ public final class JsEngine implements AutoCloseable {
     public static final class Builder {
         private Builtins builtins;
         private ObjectMapper mapper;
-        private Function<String, String> importedFunction;
+        private Function<MemoryLimits, Memory> memoryFactory;
 
         private Builder() {}
 
@@ -279,14 +281,22 @@ public final class JsEngine implements AutoCloseable {
             return this;
         }
 
-        public JsEngine build() {
+        public Builder withMemoryFactory(Function<MemoryLimits, Memory> memoryFactory) {
+            this.memoryFactory = memoryFactory;
+            return this;
+        }
+
+        public Engine build() {
             if (mapper == null) {
                 mapper = DEFAULT_OBJECT_MAPPER;
             }
             if (builtins == null) {
                 builtins = Builtins.builder().build();
             }
-            return new JsEngine(builtins, mapper);
+            if (memoryFactory == null) {
+                memoryFactory = ByteArrayMemory::new;
+            }
+            return new Engine(builtins, mapper, memoryFactory);
         }
     }
 }

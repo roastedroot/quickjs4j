@@ -8,4 +8,6 @@ Things TODO:
 - verify how to use JavaScript libraries - also TS - DONE (cowsay and zod)
 - make it possible to cache compiled JavaScript - DONE
 - write an executor that can cache already compiled scripts - DONE
-- wrap things up with an annotation processor - STARTED (note write it manually first)
+- wrap things up with an annotation processor - DONE
+- rename everything
+- more tests for primitive types in annotation processor

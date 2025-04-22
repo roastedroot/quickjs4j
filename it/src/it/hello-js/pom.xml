@@ -15,12 +15,12 @@
   <dependencies>
     <dependency>
       <groupId>io.roastedroot</groupId>
-      <artifactId>chicory-js</artifactId>
+      <artifactId>quickjs4j</artifactId>
       <version>@project.version@</version>
     </dependency>
     <dependency>
       <groupId>io.roastedroot</groupId>
-      <artifactId>chicory-js-annotations</artifactId>
+      <artifactId>quickjs4j-annotations</artifactId>
       <version>@project.version@</version>
     </dependency>
 
@@ -49,7 +49,7 @@
           <annotationProcessorPaths>
             <path>
               <groupId>io.roastedroot</groupId>
-              <artifactId>chicory-js-processor</artifactId>
+              <artifactId>quickjs4j-processor</artifactId>
               <version>@project.version@</version>
             </path>
           </annotationProcessorPaths>

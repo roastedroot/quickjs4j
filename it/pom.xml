@@ -4,21 +4,21 @@
 
   <parent>
     <groupId>io.roastedroot</groupId>
-    <artifactId>chicory-js-parent</artifactId>
+    <artifactId>quickjs4j-parent</artifactId>
     <version>999-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
 
-  <artifactId>chicory-js-it</artifactId>
+  <artifactId>quickjs4j-it</artifactId>
   <packaging>jar</packaging>
   <name>Chicory - Annotations - IT</name>
-  <description>Integration tests for the Chicory JS annotations</description>
+  <description>Integration tests for the QuickJs4J annotations</description>
 
   <dependencies>
     <!-- Dummy dependency to force the order -->
     <dependency>
       <groupId>io.roastedroot</groupId>
-      <artifactId>chicory-js-processor</artifactId>
+      <artifactId>quickjs4j-processor</artifactId>
       <version>${project.version}</version>
     </dependency>
   </dependencies>

@@ -1,4 +1,4 @@
 .idea
 target
 .cargo
-javy_chicory_plugin.wasm
+javy_quickjs4j_plugin.wasm

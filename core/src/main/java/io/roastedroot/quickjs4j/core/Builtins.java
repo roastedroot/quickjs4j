@@ -1,4 +1,4 @@
-package io.roastedroot.js;
+package io.roastedroot.quickjs4j.core;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -10,15 +10,15 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 public final class Builtins {
-    private final JsFunction[] functions;
+    private final HostFunction[] functions;
     private final Map<String, Integer> indexes;
 
-    private Builtins(JsFunction[] functions, Map<String, Integer> indexes) {
+    private Builtins(HostFunction[] functions, Map<String, Integer> indexes) {
         this.functions = functions;
         this.indexes = indexes;
     }
 
-    public JsFunction byIndex(int index) {
+    public HostFunction byIndex(int index) {
         return functions[index];
     }
 
@@ -26,7 +26,7 @@ public final class Builtins {
         return functions.length;
     }
 
-    public JsFunction byName(String name) {
+    public HostFunction byName(String name) {
         if (!indexes.containsKey(name)) {
             return null;
         }
@@ -38,16 +38,16 @@ public final class Builtins {
     }
 
     public static class Builder {
-        private List<JsFunction> functions = new ArrayList<>();
+        private List<HostFunction> functions = new ArrayList<>();
 
-        public Builder add(JsFunction fun) {
+        public Builder add(HostFunction fun) {
             // TODO: check if someone might want to leave holes
             assert (fun.index() == functions.size());
             functions.add(fun);
             return this;
         }
 
-        public Builder add(JsFunction... functions) {
+        public Builder add(HostFunction... functions) {
             for (var fun : functions) {
                 this.add(fun);
             }
@@ -56,7 +56,7 @@ public final class Builtins {
 
         public Builder addIntIntToInt(String name, BiFunction<Integer, Integer, Integer> fn) {
             return add(
-                    new JsFunction(
+                    new HostFunction(
                             name,
                             functions.size(),
                             List.of(Integer.class, Integer.class),
@@ -66,7 +66,7 @@ public final class Builtins {
 
         public Builder addVoidToInt(String name, Supplier<Integer> fn) {
             return add(
-                    new JsFunction(
+                    new HostFunction(
                             name,
                             functions.size(),
                             List.of(),
@@ -78,7 +78,7 @@ public final class Builtins {
 
         public Builder addVoidToString(String name, Supplier<String> fn) {
             return add(
-                    new JsFunction(
+                    new HostFunction(
                             name,
                             functions.size(),
                             List.of(),
@@ -90,7 +90,7 @@ public final class Builtins {
 
         public Builder addIntToVoid(String name, Consumer<Integer> fn) {
             return add(
-                    new JsFunction(
+                    new HostFunction(
                             name,
                             functions.size(),
                             List.of(Integer.class),
@@ -103,7 +103,7 @@ public final class Builtins {
 
         public Builder addVoidToVoid(String name, Runnable fn) {
             return add(
-                    new JsFunction(
+                    new HostFunction(
                             name,
                             functions.size(),
                             List.of(),
@@ -116,7 +116,7 @@ public final class Builtins {
 
         public Builder addIntToString(String name, Function<Integer, String> fn) {
             return add(
-                    new JsFunction(
+                    new HostFunction(
                             name,
                             functions.size(),
                             List.of(Integer.class),
@@ -128,7 +128,7 @@ public final class Builtins {
 
         public Builder addStringToInt(String name, Function<String, Integer> fn) {
             return add(
-                    new JsFunction(
+                    new HostFunction(
                             name,
                             functions.size(),
                             List.of(String.class),
@@ -140,7 +140,7 @@ public final class Builtins {
 
         public Builder addStringToString(String name, Function<String, String> fn) {
             return add(
-                    new JsFunction(
+                    new HostFunction(
                             name,
                             functions.size(),
                             List.of(String.class),
@@ -152,7 +152,7 @@ public final class Builtins {
 
         public Builder addStringToVoid(String name, Consumer<String> fn) {
             return add(
-                    new JsFunction(
+                    new HostFunction(
                             name,
                             functions.size(),
                             List.of(String.class),
@@ -164,7 +164,7 @@ public final class Builtins {
         }
 
         public Builtins build() {
-            var finalFuncs = new JsFunction[functions.size()];
+            var finalFuncs = new HostFunction[functions.size()];
             var indexes = new HashMap<String, Integer>();
             for (int i = 0; i < functions.size(); i++) {
                 finalFuncs[i] = functions.get(i);

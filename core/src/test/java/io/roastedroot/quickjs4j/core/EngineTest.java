@@ -1,4 +1,4 @@
-package io.roastedroot.js;
+package io.roastedroot.quickjs4j.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -15,7 +15,7 @@ import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.opentest4j.AssertionFailedError;
 
-public class JsEngineTest {
+public class EngineTest {
 
     @Test
     public void basicUsage() {
@@ -31,16 +31,16 @@ public class JsEngineTest {
                                     return "{ received: " + str + " }";
                                 })
                         .build();
-        var chicoryJs = JsEngine.builder().withBuiltins(builtins).build();
+        var engine = Engine.builder().withBuiltins(builtins).build();
 
         // Act
         var codePtr =
-                chicoryJs.compile(
+                engine.compile(
                         "console.log(\"hello js world!!!\");"
                                 + " console.error(java_imported_function(\"ciao\"));");
-        chicoryJs.exec(codePtr);
-        chicoryJs.free(codePtr);
-        chicoryJs.close();
+        engine.exec(codePtr);
+        engine.free(codePtr);
+        engine.close();
 
         // Assert
         assertTrue(invoked.get());
@@ -58,33 +58,33 @@ public class JsEngineTest {
     public void callJavaFunctionsFromJS() {
         var builtins =
                 Builtins.builder()
-                        .addIntIntToInt("add", JsEngineTest::add)
-                        .addIntToVoid("check", JsEngineTest.check(42))
+                        .addIntIntToInt("add", EngineTest::add)
+                        .addIntToVoid("check", EngineTest.check(42))
                         .build();
 
-        var chicoryJs = JsEngine.builder().withBuiltins(builtins).build();
+        var engine = Engine.builder().build().builder().withBuiltins(builtins).build();
 
-        var codePtr = chicoryJs.compile("check(add(40, 2));");
-        chicoryJs.exec(codePtr);
-        chicoryJs.free(codePtr);
-        chicoryJs.close();
+        var codePtr = engine.compile("check(add(40, 2));");
+        engine.exec(codePtr);
+        engine.free(codePtr);
+        engine.close();
     }
 
     @Test
     public void callJavaFunctionsFromJSNegativeCheck() {
         var builtins =
                 Builtins.builder()
-                        .addIntIntToInt("add", JsEngineTest::add)
-                        .addIntToVoid("check", JsEngineTest.check(43))
+                        .addIntIntToInt("add", EngineTest::add)
+                        .addIntToVoid("check", EngineTest.check(43))
                         .build();
 
-        var chicoryJs = JsEngine.builder().withBuiltins(builtins).build();
+        var engine = Engine.builder().withBuiltins(builtins).build();
 
-        var codePtr = chicoryJs.compile("check(add(40, 2));");
+        var codePtr = engine.compile("check(add(40, 2));");
 
-        assertThrows(AssertionError.class, () -> chicoryJs.exec(codePtr));
-        chicoryJs.free(codePtr);
-        chicoryJs.close();
+        assertThrows(AssertionError.class, () -> engine.exec(codePtr));
+        engine.free(codePtr);
+        engine.close();
     }
 
     boolean func1Called;
@@ -126,7 +126,7 @@ public class JsEngineTest {
         return "funcS" + a;
     }
 
-    static void compileAndExec(JsEngine jsRunner, String code) {
+    static void compileAndExec(Engine jsRunner, String code) {
         var codePtr = jsRunner.compile(code);
         jsRunner.exec(codePtr);
         jsRunner.free(codePtr);
@@ -147,28 +147,27 @@ public class JsEngineTest {
                         .addStringToVoid("check", str -> assertEquals(toCheck.get(), str))
                         .build();
 
-        var chicoryJs = JsEngine.builder().withBuiltins(builtins).build();
+        var engine = Engine.builder().withBuiltins(builtins).build();
 
-        compileAndExec(chicoryJs, "func1();");
+        compileAndExec(engine, "func1();");
         assertTrue(func1Called);
 
-        compileAndExec(chicoryJs, "func2(10);");
+        compileAndExec(engine, "func2(10);");
         assertEquals(10, func2Called);
 
-        compileAndExec(chicoryJs, "func3(\"h3110\");");
+        compileAndExec(engine, "func3(\"h3110\");");
         assertEquals("h3110", func3Called);
 
         toCheck.set("func4");
-        compileAndExec(chicoryJs, "check(func4());");
+        compileAndExec(engine, "check(func4());");
         assertEquals("func4", func4Called);
 
-        compileAndExec(chicoryJs, "func5(11);");
+        compileAndExec(engine, "func5(11);");
         assertEquals(11, func5Called);
 
         // negative - needs to be last as the runtime needs a restart after exception
         toCheck.set("myFunc");
-        assertThrows(
-                AssertionFailedError.class, () -> compileAndExec(chicoryJs, "check(func4());"));
+        assertThrows(AssertionFailedError.class, () -> compileAndExec(engine, "check(func4());"));
     }
 
     @Test
@@ -179,7 +178,7 @@ public class JsEngineTest {
         var builtins =
                 Builtins.builder()
                         .add(
-                                new JsFunction(
+                                new HostFunction(
                                         "myFunc",
                                         0,
                                         List.of(Integer.class, String.class, Integer.class),
@@ -196,11 +195,10 @@ public class JsEngineTest {
                                         }))
                         .build();
 
-        var chicoryJs = JsEngine.builder().withBuiltins(builtins).build();
+        var engine = Engine.builder().withBuiltins(builtins).build();
 
         compileAndExec(
-                chicoryJs,
-                String.format("myFunc(%d, \"%s\", %d);", expectedX, expectedY, expectedZ));
+                engine, String.format("myFunc(%d, \"%s\", %d);", expectedX, expectedY, expectedZ));
     }
 
     private static class User {
@@ -240,11 +238,11 @@ public class JsEngineTest {
         var builtins =
                 Builtins.builder()
                         .add(
-                                new JsFunction(
+                                new HostFunction(
                                         "getUser",
                                         0,
                                         List.of(String.class, String.class, Integer.class),
-                                        JavaRef.class,
+                                        HostRef.class,
                                         (args) -> {
                                             var name = (String) args.get(0);
                                             var surname = (String) args.get(1);
@@ -253,10 +251,10 @@ public class JsEngineTest {
                                             return new User(name, surname, age);
                                         }))
                         .add(
-                                new JsFunction(
+                                new HostFunction(
                                         "checkUser",
                                         1,
-                                        List.of(JavaRef.class),
+                                        List.of(HostRef.class),
                                         Void.class,
                                         (args) -> {
                                             var user = (User) args.get(0);
@@ -266,10 +264,10 @@ public class JsEngineTest {
                                         }))
                         .build();
 
-        var chicoryJs = JsEngine.builder().withBuiltins(builtins).build();
+        var engine = Engine.builder().withBuiltins(builtins).build();
 
         compileAndExec(
-                chicoryJs,
+                engine,
                 String.format(
                         "const user = getUser(\"%s\", \"%s\", %d);\n" + "checkUser(user);",
                         expectedUser.name, expectedUser.surname, expectedUser.age));
@@ -291,16 +289,14 @@ public class JsEngineTest {
                         .addVoidToString("java_text", () -> "my Moooodule")
                         .addStringToVoid("java_check", (str) -> assertEquals(myCow, str))
                         .build();
-        var chicoryJs = JsEngine.builder().withBuiltins(builtins).build();
+        var engine = Engine.builder().withBuiltins(builtins).build();
 
         var jsSource =
                 new String(
-                        JsEngineTest.class
-                                .getResourceAsStream("/cowsay/dist/out.js")
-                                .readAllBytes(),
+                        EngineTest.class.getResourceAsStream("/cowsay/dist/out.js").readAllBytes(),
                         StandardCharsets.UTF_8);
 
-        compileAndExec(chicoryJs, jsSource);
+        compileAndExec(engine, jsSource);
     }
 
     public static class ZodResult {
@@ -344,7 +340,7 @@ public class JsEngineTest {
         var builtins =
                 Builtins.builder()
                         .add(
-                                new JsFunction(
+                                new HostFunction(
                                         "java_check_tuna",
                                         0,
                                         List.of(ZodResult.class),
@@ -358,7 +354,7 @@ public class JsEngineTest {
                                             return null;
                                         }))
                         .add(
-                                new JsFunction(
+                                new HostFunction(
                                         "java_check_number",
                                         1,
                                         List.of(ZodResult.class),
@@ -374,33 +370,33 @@ public class JsEngineTest {
                                             return null;
                                         }))
                         .build();
-        var chicoryJs = JsEngine.builder().withBuiltins(builtins).build();
+        var engine = Engine.builder().withBuiltins(builtins).build();
 
-        var jsSource = JsEngineTest.class.getResourceAsStream("/zod/dist/out.js").readAllBytes();
+        var jsSource = EngineTest.class.getResourceAsStream("/zod/dist/out.js").readAllBytes();
 
-        var codePtr = chicoryJs.compile(jsSource);
-        chicoryJs.exec(codePtr);
-        chicoryJs.free(codePtr);
-        chicoryJs.close();
+        var codePtr = engine.compile(jsSource);
+        engine.exec(codePtr);
+        engine.free(codePtr);
+        engine.close();
     }
 
     @Test
     public void cacheCompiledJS() throws Exception {
         // Build QuickJs instance
-        var chicoryJs = JsEngine.builder().build();
+        var engine = Engine.builder().build();
 
         var jsSource = "console.log(\"hello world!\")";
-        var codePtr = chicoryJs.compile(jsSource);
+        var codePtr = engine.compile(jsSource);
 
-        var jsBytecode = chicoryJs.readCompiled(codePtr);
-        chicoryJs.free(codePtr);
-        chicoryJs.close();
+        var jsBytecode = engine.readCompiled(codePtr);
+        engine.free(codePtr);
+        engine.close();
 
         // Runtime QuickJs instance
-        var runtimeChicoryJs = JsEngine.builder().build();
-        var runtimeCodePtr = runtimeChicoryJs.writeCompiled(jsBytecode);
-        runtimeChicoryJs.exec(runtimeCodePtr);
-        runtimeChicoryJs.free(runtimeCodePtr);
-        runtimeChicoryJs.close();
+        var runtimeEngine = Engine.builder().build();
+        var runtimeCodePtr = runtimeEngine.writeCompiled(jsBytecode);
+        runtimeEngine.exec(runtimeCodePtr);
+        runtimeEngine.free(runtimeCodePtr);
+        runtimeEngine.close();
     }
 }

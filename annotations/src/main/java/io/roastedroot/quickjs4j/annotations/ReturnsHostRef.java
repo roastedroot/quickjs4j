@@ -1,4 +1,4 @@
-package io.roastedroot.js.annotations;
+package io.roastedroot.quickjs4j.annotations;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -7,6 +7,4 @@ import java.lang.annotation.Target;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
-public @interface JsFunction {
-    String value();
-}
+public @interface ReturnsHostRef {}

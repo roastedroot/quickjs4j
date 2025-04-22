@@ -1,9 +1,9 @@
-package io.roastedroot.js;
+package io.roastedroot.quickjs4j.core;
 
 import java.util.List;
 import java.util.function.Function;
 
-public class JsFunction {
+public class HostFunction {
     // TODO: check if both name and index are useful
     private final String name;
     private final int index;
@@ -13,7 +13,7 @@ public class JsFunction {
     // function implementation
     private final Function<List<Object>, Object> fn;
 
-    public JsFunction(
+    public HostFunction(
             String name,
             int index,
             List<Class> paramTypes,

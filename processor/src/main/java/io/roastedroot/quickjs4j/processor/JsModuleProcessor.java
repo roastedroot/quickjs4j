@@ -1,4 +1,4 @@
-package io.roastedroot.js.processor;
+package io.roastedroot.quickjs4j.processor;
 
 import static com.github.javaparser.StaticJavaParser.parseType;
 import static com.github.javaparser.printer.configuration.DefaultPrinterConfiguration.ConfigOption.COLUMN_ALIGN_PARAMETERS;
@@ -31,10 +31,10 @@ import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.printer.DefaultPrettyPrinter;
 import com.github.javaparser.printer.configuration.DefaultConfigurationOption;
 import com.github.javaparser.printer.configuration.DefaultPrinterConfiguration;
-import io.roastedroot.js.annotations.JavaRefParam;
-import io.roastedroot.js.annotations.JsFunction;
-import io.roastedroot.js.annotations.JsModule;
-import io.roastedroot.js.annotations.ReturningJavaRef;
+import io.roastedroot.quickjs4j.annotations.HostFunction;
+import io.roastedroot.quickjs4j.annotations.HostRefParam;
+import io.roastedroot.quickjs4j.annotations.JsModule;
+import io.roastedroot.quickjs4j.annotations.ReturnsHostRef;
 import java.io.IOException;
 import java.io.Writer;
 import java.lang.annotation.Annotation;
@@ -125,7 +125,7 @@ public final class JsModuleProcessor extends AbstractProcessor {
         List<Expression> functions = new ArrayList<>();
         int functionIndex = 0;
         for (Element member : elements().getAllMembers(type)) {
-            if (member instanceof ExecutableElement && annotatedWith(member, JsFunction.class)) {
+            if (member instanceof ExecutableElement && annotatedWith(member, HostFunction.class)) {
                 functions.add(processMethod((ExecutableElement) member, functionIndex++));
             }
         }
@@ -138,10 +138,10 @@ public final class JsModuleProcessor extends AbstractProcessor {
             cu.addImport(type.getQualifiedName().toString());
         }
 
-        cu.addImport("io.roastedroot.js.Builtins");
-        cu.addImport("io.roastedroot.js.JsFunction");
-        cu.addImport("io.roastedroot.js.JavaRef");
-        cu.addImport("java.util.List");
+        cu.addImport("io.roastedroot.quickjs4j.core.Builtins");
+        cu.addImport("io.roastedroot.quickjs4j.core.HostFunction");
+        cu.addImport("io.roastedroot.quickjs4j.core.HostRef");
+        cu.addImport(List.class);
 
         var typeName = type.getSimpleName().toString();
         var processorName = new StringLiteralExpr(getClass().getName());
@@ -155,7 +155,7 @@ public final class JsModuleProcessor extends AbstractProcessor {
 
         var newJsFunctions =
                 new ArrayCreationExpr(
-                        parseType("JsFunction"),
+                        parseType("HostFunction"),
                         new NodeList<>(new ArrayCreationLevel()),
                         new ArrayInitializerExpr(NodeList.nodeList(functions)));
 
@@ -163,7 +163,7 @@ public final class JsModuleProcessor extends AbstractProcessor {
                 .setPublic(true)
                 .setStatic(true)
                 .addParameter(typeName, "jsModule")
-                .setType("JsFunction[]")
+                .setType("HostFunction[]")
                 .setBody(new BlockStmt(new NodeList<>(new ReturnStmt(newJsFunctions))));
 
         String prefix = (pkg.isUnnamed()) ? "" : packageName + ".";
@@ -175,34 +175,50 @@ public final class JsModuleProcessor extends AbstractProcessor {
         }
     }
 
+    private void addPrimitiveParam(
+            String typeLiteral, NodeList<Expression> paramTypes, NodeList<Expression> arguments) {
+        var type = parseType(typeLiteral);
+        arguments.add(new CastExpr(type, argExpr(paramTypes.size())));
+        paramTypes.add(new FieldAccessExpr(new NameExpr(typeLiteral), "class"));
+    }
+
+    private Expression addPrimitiveReturn(String typeLiteral) {
+        return new FieldAccessExpr(new NameExpr(typeLiteral), "class");
+    }
+
     private Expression processMethod(ExecutableElement executable, int functionIndex) {
         // compute function name
-        var name = executable.getAnnotation(JsFunction.class).value();
+        var name = executable.getAnnotation(HostFunction.class).value();
 
         // compute parameter types and argument conversions
         NodeList<Expression> paramTypes = new NodeList<>();
         NodeList<Expression> arguments = new NodeList<>();
         for (VariableElement parameter : executable.getParameters()) {
-            Expression argExpr = argExpr(paramTypes.size());
             switch (parameter.asType().toString()) {
                 case "int":
-                    {
-                        var typeLiteral = "java.lang.Integer";
-                        var type = parseType(typeLiteral);
-                        paramTypes.add(new FieldAccessExpr(new NameExpr(typeLiteral), "class"));
-                        arguments.add(new CastExpr(type, argExpr));
-                        break;
-                    }
+                    addPrimitiveParam("java.lang.Integer", paramTypes, arguments);
+                    break;
+                case "long":
+                    addPrimitiveParam("java.lang.Long", paramTypes, arguments);
+                    break;
+                case "double":
+                    addPrimitiveParam("java.lang.Double", paramTypes, arguments);
+                    break;
+                case "float":
+                    addPrimitiveParam("java.lang.Float", paramTypes, arguments);
+                    break;
+                case "boolean":
+                    addPrimitiveParam("java.lang.Boolean", paramTypes, arguments);
+                    break;
                 default:
                     var typeLiteral = parameter.asType().toString();
                     var type = parseType(parameter.asType().toString());
-                    if (annotatedWith(parameter, JavaRefParam.class)) {
-                        var javaRefType = "io.roastedroot.js.JavaRef";
+                    arguments.add(new CastExpr(type, argExpr(paramTypes.size())));
+                    if (annotatedWith(parameter, HostRefParam.class)) {
+                        var javaRefType = "io.roastedroot.quickjs4j.core.HostRef";
                         paramTypes.add(new FieldAccessExpr(new NameExpr(javaRefType), "class"));
-                        arguments.add(new CastExpr(type, argExpr));
                     } else {
                         paramTypes.add(new FieldAccessExpr(new NameExpr(typeLiteral), "class"));
-                        arguments.add(new CastExpr(type, argExpr));
                     }
             }
         }
@@ -210,20 +226,30 @@ public final class JsModuleProcessor extends AbstractProcessor {
         // compute return type and conversion
         String returnName = executable.getReturnType().toString();
         Expression returnType;
-        boolean hasReturn;
+        boolean hasReturn = true;
         switch (returnName) {
             case "void":
                 returnType = new FieldAccessExpr(new NameExpr("java.lang.Void"), "class");
                 hasReturn = false;
                 break;
             case "int":
-                returnType = new FieldAccessExpr(new NameExpr("java.lang.Integer"), "class");
-                hasReturn = true;
+                returnType = addPrimitiveReturn("java.lang.Integer");
+                break;
+            case "long":
+                returnType = addPrimitiveReturn("java.lang.Long");
+                break;
+            case "double":
+                returnType = addPrimitiveReturn("java.lang.Double");
+                break;
+            case "float":
+                returnType = addPrimitiveReturn("java.lang.Float");
+                break;
+            case "boolean":
+                returnType = addPrimitiveReturn("java.lang.Boolean");
                 break;
             default:
-                hasReturn = true;
-                if (annotatedWith(executable, ReturningJavaRef.class)) {
-                    var javaRefType = "io.roastedroot.js.JavaRef";
+                if (annotatedWith(executable, ReturnsHostRef.class)) {
+                    var javaRefType = "io.roastedroot.quickjs4j.core.HostRef";
                     returnType = new FieldAccessExpr(new NameExpr(javaRefType), "class");
                 } else {
                     returnType = new FieldAccessExpr(new NameExpr(returnName), "class");
@@ -257,7 +283,7 @@ public final class JsModuleProcessor extends AbstractProcessor {
         // create Js function
         var function =
                 new ObjectCreationExpr()
-                        .setType("JsFunction")
+                        .setType("HostFunction")
                         .addArgument(new StringLiteralExpr(name))
                         .addArgument(new IntegerLiteralExpr(functionIndex))
                         .addArgument(new MethodCallExpr(new NameExpr("List"), "of", paramTypes))
