@@ -60,8 +60,7 @@ class MyJsTestModule implements AutoCloseable {
 
     @HostFunction("my_java_check")
     public void check(String value) {
-        invoked = true;
-        assertEquals("hello 42", value);
+        assert("hello 42".equals(value));
     }
 
     public void exec(String code) {
@@ -134,6 +133,8 @@ try (var myTestModule = new MyJsTestModule()) {
 To build this project you need a Rust toolchain available, a JDK(11+) and Maven.
 
 ```bash
+rustup target add wasm32-wasip1 # only once
+
 cd javy-plugin
 make build
 cd ..
@@ -145,6 +146,6 @@ mvn clean install
 
 This project is standing on giant's shoulders:
 
-- [QuickJS](https://bellard.org/quickjs/) is a small and embeddable Javascript engine
-- [Javy](https://github.com/bytecodealliance/javy) is a convenient JavaScript to Webassembly toolchain
-- [Chicory](https://chicory.dev/) is a ative JVM WebAssembly runtime
+- [QuickJS](https://bellard.org/quickjs/) a small and embeddable Javascript engine
+- [Javy](https://github.com/bytecodealliance/javy) a convenient JavaScript to Webassembly toolchain
+- [Chicory](https://chicory.dev/) a native JVM WebAssembly runtime
