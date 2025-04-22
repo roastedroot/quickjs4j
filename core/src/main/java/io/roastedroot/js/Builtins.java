@@ -40,18 +40,22 @@ public final class Builtins {
     public static class Builder {
         private List<JsFunction> functions = new ArrayList<>();
 
-        public Builder add(String name, JsFunction fun) {
-            // Early verify the order?
+        public Builder add(JsFunction fun) {
             // TODO: check if someone might want to leave holes
-            assert (name == fun.name());
             assert (fun.index() == functions.size());
             functions.add(fun);
             return this;
         }
 
+        public Builder add(JsFunction... functions) {
+            for (var fun : functions) {
+                this.add(fun);
+            }
+            return this;
+        }
+
         public Builder addIntIntToInt(String name, BiFunction<Integer, Integer, Integer> fn) {
             return add(
-                    name,
                     new JsFunction(
                             name,
                             functions.size(),
@@ -62,7 +66,6 @@ public final class Builtins {
 
         public Builder addVoidToInt(String name, Supplier<Integer> fn) {
             return add(
-                    name,
                     new JsFunction(
                             name,
                             functions.size(),
@@ -75,7 +78,6 @@ public final class Builtins {
 
         public Builder addVoidToString(String name, Supplier<String> fn) {
             return add(
-                    name,
                     new JsFunction(
                             name,
                             functions.size(),
@@ -88,7 +90,6 @@ public final class Builtins {
 
         public Builder addIntToVoid(String name, Consumer<Integer> fn) {
             return add(
-                    name,
                     new JsFunction(
                             name,
                             functions.size(),
@@ -102,7 +103,6 @@ public final class Builtins {
 
         public Builder addVoidToVoid(String name, Runnable fn) {
             return add(
-                    name,
                     new JsFunction(
                             name,
                             functions.size(),
@@ -116,7 +116,6 @@ public final class Builtins {
 
         public Builder addIntToString(String name, Function<Integer, String> fn) {
             return add(
-                    name,
                     new JsFunction(
                             name,
                             functions.size(),
@@ -129,7 +128,6 @@ public final class Builtins {
 
         public Builder addStringToInt(String name, Function<String, Integer> fn) {
             return add(
-                    name,
                     new JsFunction(
                             name,
                             functions.size(),
@@ -142,7 +140,6 @@ public final class Builtins {
 
         public Builder addStringToString(String name, Function<String, String> fn) {
             return add(
-                    name,
                     new JsFunction(
                             name,
                             functions.size(),
@@ -155,7 +152,6 @@ public final class Builtins {
 
         public Builder addStringToVoid(String name, Consumer<String> fn) {
             return add(
-                    name,
                     new JsFunction(
                             name,
                             functions.size(),

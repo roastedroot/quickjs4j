@@ -7,6 +7,7 @@ import com.dylibso.chicory.runtime.ByteArrayMemory;
 import com.dylibso.chicory.runtime.HostFunction;
 import com.dylibso.chicory.runtime.ImportValues;
 import com.dylibso.chicory.runtime.Instance;
+import com.dylibso.chicory.runtime.TrapException;
 import com.dylibso.chicory.wasi.WasiOptions;
 import com.dylibso.chicory.wasi.WasiPreview1;
 import com.dylibso.chicory.wasm.types.ValueType;
@@ -38,7 +39,7 @@ public final class JsEngine implements AutoCloseable {
     }
 
     private long[] invoke(Instance instance, long[] args) {
-        int proxyPtr = (int) args[0];
+        int builtinPtr = (int) args[0];
 
         int ptr = (int) args[1];
         int len = (int) args[2];
@@ -47,12 +48,12 @@ public final class JsEngine implements AutoCloseable {
         this.exports.canonicalAbiFree(ptr, len, ALIGNMENT);
         var argsString = new String(bytes, UTF_8);
 
-        var receiver = builtins.byIndex(proxyPtr);
+        var receiver = builtins.byIndex(builtinPtr);
         if (receiver == null) {
-            throw new IllegalArgumentException("Failed to find builtin at index " + proxyPtr);
+            throw new IllegalArgumentException("Failed to find builtin at index " + builtinPtr);
         }
 
-        var argsList = new ArrayList<Object>();
+        var argsList = new ArrayList<>();
         try {
             JsonNode tree = mapper.readTree(argsString);
 
@@ -184,14 +185,19 @@ public final class JsEngine implements AutoCloseable {
                         );
 
         exports.memory().write(ptr, jsCode);
-        var aggregatedCodePtr = exports.compileSrc(ptr, jsCode.length);
-        exports.canonicalAbiFree(
-                ptr, // ptr
-                jsCode.length, // length
-                ALIGNMENT // alignement
-                );
+        try {
+            var aggregatedCodePtr = exports.compileSrc(ptr, jsCode.length);
+            exports.canonicalAbiFree(
+                    ptr, // ptr
+                    jsCode.length, // length
+                    ALIGNMENT // alignement
+                    );
 
-        return aggregatedCodePtr; // 32 bit
+            return aggregatedCodePtr; // 32 bit
+        } catch (TrapException e) {
+            throw new IllegalArgumentException(
+                    "Failed to compile JS code:\n" + new String(jsCode, UTF_8), e);
+        }
     }
 
     public void exec(int codePtr) {

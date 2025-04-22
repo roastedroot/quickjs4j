@@ -179,7 +179,6 @@ public class JsEngineTest {
         var builtins =
                 Builtins.builder()
                         .add(
-                                "myFunc",
                                 new JsFunction(
                                         "myFunc",
                                         0,
@@ -241,7 +240,6 @@ public class JsEngineTest {
         var builtins =
                 Builtins.builder()
                         .add(
-                                "getUser",
                                 new JsFunction(
                                         "getUser",
                                         0,
@@ -255,7 +253,6 @@ public class JsEngineTest {
                                             return new User(name, surname, age);
                                         }))
                         .add(
-                                "checkUser",
                                 new JsFunction(
                                         "checkUser",
                                         1,
@@ -347,7 +344,6 @@ public class JsEngineTest {
         var builtins =
                 Builtins.builder()
                         .add(
-                                "java_check_tuna",
                                 new JsFunction(
                                         "java_check_tuna",
                                         0,
@@ -362,7 +358,6 @@ public class JsEngineTest {
                                             return null;
                                         }))
                         .add(
-                                "java_check_number",
                                 new JsFunction(
                                         "java_check_number",
                                         1,
