@@ -45,8 +45,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        # TODO: fix WasmResource on Windows
-        # , windows-latest]
         java-version: [11, 21]
         
     steps:
