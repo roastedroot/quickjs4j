@@ -11,7 +11,7 @@
 
   <artifactId>quickjs4j-it</artifactId>
   <packaging>jar</packaging>
-  <name>Chicory - Annotations - IT</name>
+  <name>QuickJs4J - Annotations - IT</name>
   <description>Integration tests for the QuickJs4J annotations</description>
 
   <dependencies>

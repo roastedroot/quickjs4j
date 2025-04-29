@@ -1,10 +1,6 @@
 package io.roastedroot.quickjs4j.core;
 
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -12,38 +8,23 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 public final class Runner implements AutoCloseable {
-    private final Map<String, byte[]> cache = new HashMap<>();
-    private final MessageDigest md;
     private final int timeoutMs;
     private final Engine engine;
 
     private final ExecutorService es;
 
-    private Runner(MessageDigest md, Engine engine, int timeout) {
-        this.md = md;
+    private Runner(Engine engine, int timeout) {
         this.engine = engine;
         this.es = Executors.newSingleThreadExecutor();
         this.timeoutMs = timeout;
     }
 
-    private String computeKey(byte[] code) {
-        byte[] hash = md.digest(code);
-        return new String(hash, StandardCharsets.UTF_8);
-    }
-
     public byte[] compile(String code) {
         byte[] codeBytes = code.getBytes(StandardCharsets.UTF_8);
-        var key = computeKey(codeBytes);
-
-        if (!cache.containsKey(key)) {
-            int codePtr = engine.compile(codeBytes);
-            var value = engine.readCompiled(codePtr);
-            engine.free(codePtr);
-            cache.put(key, value);
-            return value;
-        } else {
-            return cache.get(key);
-        }
+        int codePtr = engine.compile(codeBytes);
+        var value = engine.readCompiled(codePtr);
+        engine.free(codePtr);
+        return value;
     }
 
     public void exec(byte[] jsBytecode) {
@@ -57,11 +38,21 @@ public final class Runner implements AutoCloseable {
                 fut.get();
             }
         } catch (InterruptedException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Thread interrupted", e);
         } catch (ExecutionException e) {
-            throw new RuntimeException(e);
+            // in this case the ExecutionException wraps the underlying Exception
+            if (e.getCause() != null) {
+                if (e.getCause() instanceof RuntimeException) {
+                    throw (RuntimeException) e.getCause();
+                } else {
+                    throw new RuntimeException(e.getCause());
+                }
+            } else {
+                // fallback
+                throw new RuntimeException(e);
+            }
         } catch (TimeoutException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Timeout while executing", e);
         } finally {
             engine.free(codePtr);
         }
@@ -87,14 +78,8 @@ public final class Runner implements AutoCloseable {
     }
 
     public static class Builder {
-        private MessageDigest md;
         private Engine engine;
         private int timeout = -1;
-
-        public Builder withMessageDigest(MessageDigest md) {
-            this.md = md;
-            return this;
-        }
 
         public Builder withEngine(Engine engine) {
             this.engine = engine;
@@ -107,17 +92,10 @@ public final class Runner implements AutoCloseable {
         }
 
         public Runner build() {
-            if (this.md == null) {
-                try {
-                    this.md = MessageDigest.getInstance("MD5");
-                } catch (NoSuchAlgorithmException e) {
-                    throw new RuntimeException("Missing MD5 algorithm on the platform.", e);
-                }
-            }
             if (this.engine == null) {
                 this.engine = Engine.builder().build();
             }
-            return new Runner(this.md, this.engine, this.timeout);
+            return new Runner(this.engine, this.timeout);
         }
     }
 }

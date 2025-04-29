@@ -11,3 +11,6 @@ Things TODO:
 - wrap things up with an annotation processor - DONE
 - rename everything
 - more tests for primitive types in annotation processor
+
+- test more closer to reality (e.g. with Apicurio like interface)
+- generate the stub project for npm testing? or make it easy from Java?

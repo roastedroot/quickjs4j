@@ -46,4 +46,8 @@ public class HostFunction {
     public Class returnType() {
         return returnType;
     }
+
+    public HostFunction withIndex(int index) {
+        return new HostFunction(name, index, paramTypes, returnType, fn);
+    }
 }
