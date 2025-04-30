@@ -4,9 +4,7 @@ import java.util.List;
 import java.util.function.Function;
 
 public class HostFunction {
-    // TODO: check if both name and index are useful
     private final String name;
-    private final int index;
     private final List<Class> paramTypes;
     private final Class returnType;
 
@@ -15,12 +13,10 @@ public class HostFunction {
 
     public HostFunction(
             String name,
-            int index,
             List<Class> paramTypes,
             Class returnType,
             Function<List<Object>, Object> fn) {
         this.name = name;
-        this.index = index;
         this.paramTypes = paramTypes;
         this.returnType = returnType;
 
@@ -35,10 +31,6 @@ public class HostFunction {
         return name;
     }
 
-    public int index() {
-        return index;
-    }
-
     public List<Class> paramTypes() {
         return paramTypes;
     }
@@ -48,6 +40,6 @@ public class HostFunction {
     }
 
     public HostFunction withIndex(int index) {
-        return new HostFunction(name, index, paramTypes, returnType, fn);
+        return new HostFunction(name, paramTypes, returnType, fn);
     }
 }

@@ -1,6 +1,7 @@
 package io.roastedroot.quickjs4j.core;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -10,39 +11,46 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 public final class Builtins {
-    private final HostFunction[] functions;
-    private final Map<String, Integer> indexes;
+    private final String moduleName;
+    private final Map<String, HostFunction> functions;
 
-    private Builtins(HostFunction[] functions, Map<String, Integer> indexes) {
+    private Builtins(String moduleName, Map<String, HostFunction> functions) {
+        this.moduleName = moduleName;
         this.functions = functions;
-        this.indexes = indexes;
-    }
-
-    public HostFunction byIndex(int index) {
-        return functions[index];
-    }
-
-    public int size() {
-        return functions.length;
     }
 
     public HostFunction byName(String name) {
-        if (!indexes.containsKey(name)) {
-            return null;
-        }
-        return functions[indexes.get(name)];
+        return functions.get(name);
     }
 
-    public static Builder builder() {
-        return new Builder();
+    public Collection<HostFunction> functions() {
+        return functions.values();
     }
 
-    public static class Builder {
+    public String moduleName() {
+        return moduleName;
+    }
+
+    public static Builder builder(String moduleName) {
+        return new Builder(moduleName);
+    }
+
+    public static final class Builder {
+        private final String moduleName;
         private List<HostFunction> functions = new ArrayList<>();
 
+        private Builder(String moduleName) {
+            this.moduleName = moduleName;
+        }
+
         public Builder add(HostFunction fun) {
-            // TODO: check if someone might want to leave holes
-            assert (fun.index() == functions.size());
+            if (functions.contains(fun.name())) {
+                throw new IllegalArgumentException(
+                        "A function with name: "
+                                + fun.name()
+                                + " is already defined in the module: "
+                                + moduleName);
+            }
             functions.add(fun);
             return this;
         }
@@ -58,7 +66,6 @@ public final class Builtins {
             return add(
                     new HostFunction(
                             name,
-                            functions.size(),
                             List.of(Integer.class, Integer.class),
                             Integer.class,
                             (args) -> fn.apply((Integer) args.get(0), (Integer) args.get(1))));
@@ -68,7 +75,6 @@ public final class Builtins {
             return add(
                     new HostFunction(
                             name,
-                            functions.size(),
                             List.of(),
                             Integer.class,
                             (args) -> {
@@ -80,7 +86,6 @@ public final class Builtins {
             return add(
                     new HostFunction(
                             name,
-                            functions.size(),
                             List.of(),
                             String.class,
                             (args) -> {
@@ -92,7 +97,6 @@ public final class Builtins {
             return add(
                     new HostFunction(
                             name,
-                            functions.size(),
                             List.of(Integer.class),
                             Void.class,
                             (args) -> {
@@ -105,7 +109,6 @@ public final class Builtins {
             return add(
                     new HostFunction(
                             name,
-                            functions.size(),
                             List.of(),
                             Void.class,
                             (args) -> {
@@ -118,7 +121,6 @@ public final class Builtins {
             return add(
                     new HostFunction(
                             name,
-                            functions.size(),
                             List.of(Integer.class),
                             String.class,
                             (args) -> {
@@ -130,7 +132,6 @@ public final class Builtins {
             return add(
                     new HostFunction(
                             name,
-                            functions.size(),
                             List.of(String.class),
                             Integer.class,
                             (args) -> {
@@ -142,7 +143,6 @@ public final class Builtins {
             return add(
                     new HostFunction(
                             name,
-                            functions.size(),
                             List.of(String.class),
                             String.class,
                             (args) -> {
@@ -154,7 +154,6 @@ public final class Builtins {
             return add(
                     new HostFunction(
                             name,
-                            functions.size(),
                             List.of(String.class),
                             Integer.class,
                             (args) -> {
@@ -164,13 +163,11 @@ public final class Builtins {
         }
 
         public Builtins build() {
-            var finalFuncs = new HostFunction[functions.size()];
-            var indexes = new HashMap<String, Integer>();
-            for (int i = 0; i < functions.size(); i++) {
-                finalFuncs[i] = functions.get(i);
-                indexes.put(finalFuncs[i].name(), i);
+            var finalFuncs = new HashMap<String, HostFunction>();
+            for (HostFunction func : functions) {
+                finalFuncs.put(func.name(), func);
             }
-            return new Builtins(finalFuncs, indexes);
+            return new Builtins(moduleName, finalFuncs);
         }
     }
 }

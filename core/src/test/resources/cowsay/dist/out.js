@@ -821,7 +821,7 @@ EOC
 
   // index.js
   var cowsay = require_cowsay_umd();
-  java_check(
-    cowsay.say({ text: java_text() })
+  from_java.java_check(
+    cowsay.say({ text: from_java.java_text() })
   );
 })();

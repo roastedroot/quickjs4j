@@ -17,7 +17,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -31,7 +33,7 @@ public final class Engine implements AutoCloseable {
     private final Instance instance;
     private final Engine_ModuleExports exports;
 
-    private final Builtins builtins;
+    private final Map<String, Builtins> builtins;
     private final ObjectMapper mapper;
 
     private final List<Object> javaRefs = new ArrayList<>();
@@ -40,88 +42,106 @@ public final class Engine implements AutoCloseable {
         return new Builder();
     }
 
-    private long[] invoke(Instance instance, long[] args) {
-        int builtinPtr = (int) args[0];
-
-        int ptr = (int) args[1];
-        int len = (int) args[2];
-
+    private String readJavyString(int ptr, int len) {
         var bytes = instance.memory().readBytes(ptr, len);
-        this.exports.canonicalAbiFree(ptr, len, ALIGNMENT);
-        var argsString = new String(bytes, UTF_8);
+        // this.exports.canonicalAbiFree(ptr, len, ALIGNMENT);
+        return new String(bytes, UTF_8);
+    }
 
-        var receiver = builtins.byIndex(builtinPtr);
-        if (receiver == null) {
-            throw new IllegalArgumentException("Failed to find builtin at index " + builtinPtr);
-        }
-
-        var argsList = new ArrayList<>();
+    private long[] invoke(Instance instance, long[] args) {
+        int modulePtr = (int) args[0];
+        int moduleLen = (int) args[1];
+        int funcPtr = (int) args[2];
+        int funcLen = (int) args[3];
+        int argsPtr = (int) args[4];
+        int argsLen = (int) args[5];
         try {
-            JsonNode tree = mapper.readTree(argsString);
+            String moduleName = readJavyString(modulePtr, moduleLen);
+            String funcName = readJavyString(funcPtr, funcLen);
+            String argsString = readJavyString(argsPtr, argsLen);
 
-            if (tree.size() != receiver.paramTypes().size()) {
+            if (!builtins.containsKey(moduleName)) {
+                throw new IllegalArgumentException("Failed to find builtin module name " + moduleName);
+            }
+            if (builtins.get(moduleName).byName(funcName) == null) {
                 throw new IllegalArgumentException(
-                        "Function "
-                                + receiver.name()
-                                + " has been invoked with the incorrect number of parameters needs:"
-                                + " "
-                                + receiver.paramTypes().stream()
-                                        .map(Class::getCanonicalName)
-                                        .collect(Collectors.joining(", ")));
+                        "Failed to find function with name " + funcName + " in module " + moduleName);
             }
+            var receiver = builtins.get(moduleName).byName(funcName);
 
-            for (int i = 0; i < tree.size(); i++) {
-                var clazz = receiver.paramTypes().get(i);
-                var value = tree.get(i);
+            var argsList = new ArrayList<>();
+            try {
+                JsonNode tree = mapper.readTree(argsString);
 
-                if (clazz == HostRef.class) {
-                    argsList.add(javaRefs.get(value.intValue()));
-                } else {
-                    argsList.add(mapper.treeToValue(value, clazz));
+                if (tree.size() != receiver.paramTypes().size()) {
+                    throw new IllegalArgumentException(
+                            "Function "
+                                    + receiver.name()
+                                    + " has been invoked with the incorrect number of parameters needs:"
+                                    + " "
+                                    + receiver.paramTypes().stream()
+                                    .map(Class::getCanonicalName)
+                                    .collect(Collectors.joining(", ")));
                 }
-            }
 
-            var res = receiver.invoke(argsList);
+                for (int i = 0; i < tree.size(); i++) {
+                    var clazz = receiver.paramTypes().get(i);
+                    var value = tree.get(i);
 
-            // Converting Java references into pointers for JS
-            var returnType = receiver.returnType();
-            if (returnType == HostRef.class) {
-                returnType = Integer.class;
-                if (res instanceof HostRef) {
-                    res = ((HostRef) res).pointer();
-                } else {
-                    javaRefs.add(res);
-                    res = javaRefs.size() - 1;
+                    if (clazz == HostRef.class) {
+                        argsList.add(javaRefs.get(value.intValue()));
+                    } else {
+                        argsList.add(mapper.treeToValue(value, clazz));
+                    }
                 }
+
+                var res = receiver.invoke(argsList);
+
+                // Converting Java references into pointers for JS
+                var returnType = receiver.returnType();
+                if (returnType == HostRef.class) {
+                    returnType = Integer.class;
+                    if (res instanceof HostRef) {
+                        res = ((HostRef) res).pointer();
+                    } else {
+                        javaRefs.add(res);
+                        res = javaRefs.size() - 1;
+                    }
+                }
+
+                var returnStr = mapper.writerFor(returnType).writeValueAsString(res);
+                var returnBytes = returnStr.getBytes();
+
+                var returnPtr =
+                        exports.canonicalAbiRealloc(
+                                0, // original_ptr
+                                0, // original_size
+                                ALIGNMENT, // alignment
+                                returnBytes.length // new size
+                        );
+                exports.memory().write(returnPtr, returnBytes);
+
+                var LEN = 8;
+                var widePtr =
+                        exports.canonicalAbiRealloc(
+                                0, // original_ptr
+                                0, // original_size
+                                ALIGNMENT, // alignment
+                                LEN // new size
+                        );
+
+                instance.memory().writeI32(widePtr, returnPtr);
+                instance.memory().writeI32(widePtr + 4, returnBytes.length);
+
+                return new long[]{widePtr};
+            } catch (JsonProcessingException e) {
+                throw new RuntimeException(e);
             }
-
-            var returnStr = mapper.writerFor(returnType).writeValueAsString(res);
-            var returnBytes = returnStr.getBytes();
-
-            var returnPtr =
-                    exports.canonicalAbiRealloc(
-                            0, // original_ptr
-                            0, // original_size
-                            ALIGNMENT, // alignment
-                            returnBytes.length // new size
-                            );
-            exports.memory().write(returnPtr, returnBytes);
-
-            var LEN = 8;
-            var widePtr =
-                    exports.canonicalAbiRealloc(
-                            0, // original_ptr
-                            0, // original_size
-                            ALIGNMENT, // alignment
-                            LEN // new size
-                            );
-
-            instance.memory().writeI32(widePtr, returnPtr);
-            instance.memory().writeI32(widePtr + 4, returnBytes.length);
-
-            return new long[] {widePtr};
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
+        } finally {
+            // TODO: enabling those frees breaks everything, double-check
+            // this.exports.canonicalAbiFree(modulePtr, moduleLen, ALIGNMENT);
+            // this.exports.canonicalAbiFree(funcPtr, funcLen, ALIGNMENT);
+            // this.exports.canonicalAbiFree(argsPtr, argsLen, ALIGNMENT);
         }
     }
 
@@ -129,12 +149,20 @@ public final class Engine implements AutoCloseable {
             new HostFunction(
                     "chicory",
                     "invoke",
-                    List.of(ValueType.I32, ValueType.I32, ValueType.I32),
+                    List.of(
+                            ValueType.I32,
+                            ValueType.I32,
+                            ValueType.I32,
+                            ValueType.I32,
+                            ValueType.I32,
+                            ValueType.I32),
                     List.of(ValueType.I32),
                     this::invoke);
 
     private Engine(
-            Builtins builtins, ObjectMapper mapper, Function<MemoryLimits, Memory> memoryFactory) {
+            Map<String, Builtins> builtins,
+            ObjectMapper mapper,
+            Function<MemoryLimits, Memory> memoryFactory) {
         this.mapper = mapper;
         this.builtins = builtins;
         instance =
@@ -154,17 +182,20 @@ public final class Engine implements AutoCloseable {
     // This function is used to dynamically generate the bindings defined by the Builtins
     private byte[] jsPrelude() {
         var preludeBuilder = new StringBuilder();
-        // TODO: if this grows I need a JS writer something
-        // TODO: verify JSON.parse
-        for (int i = 0; i < builtins.size(); i++) {
-            var fun = builtins.byIndex(i);
-            preludeBuilder.append("globalThis.javaBuiltins = {};\n");
-            preludeBuilder.append(
-                    "globalThis.javaBuiltins."
-                            + fun.name()
-                            + " = (...args) => { return JSON.parse(java_invoke("
-                            + fun.index()
-                            + ", JSON.stringify(args) ) ) };\n");
+        for (Map.Entry<String, Builtins> builtin : builtins.entrySet()) {
+            preludeBuilder.append("globalThis." + builtin.getKey() + " = {};\n");
+            for (var func : builtins.get(builtin.getKey()).functions()) {
+                preludeBuilder.append(
+                        "globalThis."
+                                + builtin.getKey()
+                                + "."
+                                + func.name()
+                                + " = (...args) => { return JSON.parse(java_invoke(\""
+                                + builtin.getKey()
+                                + "\", \""
+                                + func.name()
+                                + "\", JSON.stringify(args))) };\n");
+            }
         }
         return preludeBuilder.toString().getBytes();
     }
@@ -266,14 +297,14 @@ public final class Engine implements AutoCloseable {
     }
 
     public static final class Builder {
-        private Builtins builtins;
+        private List<Builtins> builtins = new ArrayList<>();
         private ObjectMapper mapper;
         private Function<MemoryLimits, Memory> memoryFactory;
 
         private Builder() {}
 
-        public Builder withBuiltins(Builtins builtins) {
-            this.builtins = builtins;
+        public Builder addBuiltins(Builtins builtins) {
+            this.builtins.add(builtins);
             return this;
         }
 
@@ -291,13 +322,15 @@ public final class Engine implements AutoCloseable {
             if (mapper == null) {
                 mapper = DEFAULT_OBJECT_MAPPER;
             }
-            if (builtins == null) {
-                builtins = Builtins.builder().build();
-            }
             if (memoryFactory == null) {
                 memoryFactory = ByteArrayMemory::new;
             }
-            return new Engine(builtins, mapper, memoryFactory);
+            Map<String, Builtins> finalBuiltins = new HashMap<>();
+            // TODO: any validation to be done here?
+            for (var builtin : builtins) {
+                finalBuiltins.put(builtin.moduleName(), builtin);
+            }
+            return new Engine(finalBuiltins, mapper, memoryFactory);
         }
     }
 }

@@ -12,7 +12,7 @@ class ArtifactStore implements AutoCloseable {
 
     public ArtifactStore() {
         var builtins = Builtins.builder().add(ArtifactStore_Builtins.toBuiltins(this)).build();
-        var engine = Engine.builder().withBuiltins(builtins).build();
+        var engine = Engine.builder().addBuiltins(builtins).build();
         this.runner = Runner.builder().withEngine(engine).build();
     }
 
@@ -20,7 +20,7 @@ class ArtifactStore implements AutoCloseable {
 
     public void add(Artifact artifact) {
         this.artifact = artifact;
-            runner.compileAndExec("set_validate_result(validate(get_artifact()));");
+        runner.compileAndExec("set_validate_result(validate(get_artifact()));");
     }
 
     @HostFunction("get_artifact")

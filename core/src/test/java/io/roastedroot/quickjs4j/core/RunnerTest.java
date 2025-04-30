@@ -15,7 +15,7 @@ public class RunnerTest {
         // Arrange
         var invoked = new AtomicBoolean(false);
         var builtins =
-                Builtins.builder()
+                Builtins.builder("from_java")
                         .addIntToVoid(
                                 "java_check",
                                 (num) -> {
@@ -23,11 +23,11 @@ public class RunnerTest {
                                     invoked.set(true);
                                 })
                         .build();
-        var jsEngine = Engine.builder().withBuiltins(builtins).build();
+        var jsEngine = Engine.builder().addBuiltins(builtins).build();
         var runner = Runner.builder().withEngine(jsEngine).build();
 
         // Act
-        runner.compileAndExec("java_check(42);");
+        runner.compileAndExec("from_java.java_check(42);");
 
         // Assert
         assertTrue(invoked.get());
