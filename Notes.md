@@ -13,6 +13,7 @@ Things TODO:
 - verify complex types with the GuestFunction interface
 - cleanup Invokable implementation
 - finish annotation processor generation for GuestFunction
+- emit the "java_api.mjs" stub to be used in JS
 
 - more tests for primitive types in annotation processor
 - test more closer to reality (e.g. with Apicurio like interface)
