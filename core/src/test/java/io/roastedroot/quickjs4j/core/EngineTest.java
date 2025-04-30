@@ -73,22 +73,6 @@ public class EngineTest {
     }
 
     @Test
-    public void debugging() {
-        var calculatorBuiltins =
-                Builtins.builder("calculator").addIntIntToInt("add", EngineTest::add).build();
-        var checkBuiltins =
-                Builtins.builder("from_java").addIntToVoid("check", EngineTest.check(42)).build();
-
-        var engine =
-                Engine.builder().addBuiltins(calculatorBuiltins).addBuiltins(checkBuiltins).build();
-
-        var codePtr = engine.compile("from_java.check(calculator.add(40, 2));");
-        engine.exec(codePtr);
-        engine.free(codePtr);
-        engine.close();
-    }
-
-    @Test
     public void callJavaFunctionsFromDifferentBundlesFromJS() {
         var calculatorBuiltins =
                 Builtins.builder("calculator").addIntIntToInt("add", EngineTest::add).build();
