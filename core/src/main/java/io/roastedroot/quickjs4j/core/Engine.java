@@ -34,6 +34,7 @@ public final class Engine implements AutoCloseable {
     private final Engine_ModuleExports exports;
 
     private final Map<String, Builtins> builtins;
+    private final Map<String, Invokables> invokables;
     private final ObjectMapper mapper;
 
     private final List<Object> javaRefs = new ArrayList<>();
@@ -48,7 +49,66 @@ public final class Engine implements AutoCloseable {
         return new String(bytes, UTF_8);
     }
 
-    private long[] invoke(Instance instance, long[] args) {
+    public Object invokeGuestFunction(
+            String moduleName, String name, List<Object> args, String libraryCode) {
+        GuestFunction guestFunction = invokables.get(moduleName).byName(name);
+        if (guestFunction.paramTypes().size() != args.size()) {
+            throw new IllegalArgumentException(
+                    "Guest function should be invoked with the expected "
+                            + guestFunction.paramTypes().size()
+                            + " params, but got: "
+                            + args.size());
+        }
+        StringBuilder paramsStr = new StringBuilder();
+        try {
+            // TODO: verify if we don't need the params classes ???
+            for (int i = 0; i < args.size(); i++) {
+                if (i > 0) {
+                    paramsStr.append(", ");
+                }
+                paramsStr.append(mapper.writeValueAsString(args.get(i)));
+            }
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+
+        int codePtr = 0;
+        try {
+            String jsCode =
+                    new String(jsPrelude(), UTF_8)
+                            + "\n"
+                            + libraryCode
+                            + "\n"
+                            + new String(jsSuffix(), UTF_8)
+                            + "\n"
+                            +
+                            // "console.log(" + moduleName + "." + guestFunction.name() + "(" +
+                            // paramsStr.toString() + "));";
+                            moduleName
+                            + "."
+                            + guestFunction.setResultFunName()
+                            + "("
+                            + moduleName
+                            + "."
+                            + guestFunction.name()
+                            + "("
+                            + paramsStr.toString()
+                            + "));";
+
+            // TODO: remove me
+            //            System.out.println("Debug invoke function: " + jsCode);
+            codePtr = compileRaw(jsCode.getBytes(UTF_8));
+            exec(codePtr);
+        } finally {
+            if (codePtr != 0) {
+                free(codePtr);
+            }
+        }
+
+        return invokables.get(moduleName).byName(name).getResult();
+    }
+
+    private long[] invokeBuiltin(Instance instance, long[] args) {
         int modulePtr = (int) args[0];
         int moduleLen = (int) args[1];
         int funcPtr = (int) args[2];
@@ -61,11 +121,15 @@ public final class Engine implements AutoCloseable {
             String argsString = readJavyString(argsPtr, argsLen);
 
             if (!builtins.containsKey(moduleName)) {
-                throw new IllegalArgumentException("Failed to find builtin module name " + moduleName);
+                throw new IllegalArgumentException(
+                        "Failed to find builtin module name " + moduleName);
             }
             if (builtins.get(moduleName).byName(funcName) == null) {
                 throw new IllegalArgumentException(
-                        "Failed to find function with name " + funcName + " in module " + moduleName);
+                        "Failed to find function with name "
+                                + funcName
+                                + " in module "
+                                + moduleName);
             }
             var receiver = builtins.get(moduleName).byName(funcName);
 
@@ -77,11 +141,13 @@ public final class Engine implements AutoCloseable {
                     throw new IllegalArgumentException(
                             "Function "
                                     + receiver.name()
-                                    + " has been invoked with the incorrect number of parameters needs:"
-                                    + " "
+                                    + " has been invoked with the incorrect number of parameters"
+                                    + " needs: "
                                     + receiver.paramTypes().stream()
-                                    .map(Class::getCanonicalName)
-                                    .collect(Collectors.joining(", ")));
+                                            .map(Class::getCanonicalName)
+                                            .collect(Collectors.joining(", "))
+                                    + ", found: "
+                                    + tree.size());
                 }
 
                 for (int i = 0; i < tree.size(); i++) {
@@ -109,7 +175,10 @@ public final class Engine implements AutoCloseable {
                     }
                 }
 
-                var returnStr = mapper.writerFor(returnType).writeValueAsString(res);
+                var returnStr =
+                        (returnType == Void.class)
+                                ? "null"
+                                : mapper.writerFor(returnType).writeValueAsString(res);
                 var returnBytes = returnStr.getBytes();
 
                 var returnPtr =
@@ -118,7 +187,7 @@ public final class Engine implements AutoCloseable {
                                 0, // original_size
                                 ALIGNMENT, // alignment
                                 returnBytes.length // new size
-                        );
+                                );
                 exports.memory().write(returnPtr, returnBytes);
 
                 var LEN = 8;
@@ -128,12 +197,12 @@ public final class Engine implements AutoCloseable {
                                 0, // original_size
                                 ALIGNMENT, // alignment
                                 LEN // new size
-                        );
+                                );
 
                 instance.memory().writeI32(widePtr, returnPtr);
                 instance.memory().writeI32(widePtr + 4, returnBytes.length);
 
-                return new long[]{widePtr};
+                return new long[] {widePtr};
             } catch (JsonProcessingException e) {
                 throw new RuntimeException(e);
             }
@@ -157,14 +226,26 @@ public final class Engine implements AutoCloseable {
                             ValueType.I32,
                             ValueType.I32),
                     List.of(ValueType.I32),
-                    this::invoke);
+                    this::invokeBuiltin);
 
     private Engine(
             Map<String, Builtins> builtins,
+            Map<String, Invokables> invokables,
             ObjectMapper mapper,
             Function<MemoryLimits, Memory> memoryFactory) {
         this.mapper = mapper;
         this.builtins = builtins;
+        // set_result builtins
+        invokables.entrySet().stream()
+                .forEach(
+                        e -> {
+                            var builder = Builtins.builder(e.getKey());
+                            e.getValue()
+                                    .functions()
+                                    .forEach(entry -> builder.add(entry.setResultHostFunction()));
+                            this.builtins.put(e.getKey(), builder.build());
+                        });
+        this.invokables = invokables;
         instance =
                 Instance.builder(JavyPluginModule.load())
                         .withMemoryFactory(memoryFactory)
@@ -200,15 +281,51 @@ public final class Engine implements AutoCloseable {
         return preludeBuilder.toString().getBytes();
     }
 
+    // This function is used to dynamically generate the bindings defined by the Invokables
+    private byte[] jsSuffix() {
+        var suffixBuilder = new StringBuilder();
+        for (Map.Entry<String, Invokables> invokable : invokables.entrySet()) {
+            //            The object is already defined by the set_result
+            //            suffixBuilder.append("globalThis." + invokable.getKey() + " = {};\n");
+            for (var func : invokables.get(invokable.getKey()).functions()) {
+                // exporting to global the functions
+                suffixBuilder.append(
+                        "globalThis."
+                                + invokable.getKey()
+                                + "."
+                                + func.name()
+                                + " = "
+                                + func.globalName()
+                                + ";\n");
+                // TODO: should I consider an additional Rust builtin?
+                // exporting like builtins the "set_result" functions, one each function
+                // injecting the builtins from the invokables makes it
+                //                suffixBuilder.append(
+                //                        "globalThis."
+                //                                + invokable.getKey()
+                //                                + "."
+                //                                + func.setResultFunName()
+                //                                + " = (arg) => { java_invoke(\""
+                //                                + invokable.getKey()
+                //                                + "\", \""
+                //                                + func.setResultFunName()
+                //                                + "\", JSON.stringify(arg)) };\n");
+            }
+        }
+        return suffixBuilder.toString().getBytes();
+    }
+
     public int compile(String js) {
         return compile(js.getBytes(UTF_8));
     }
 
     public int compile(byte[] js) {
         byte[] prelude = jsPrelude();
-        byte[] jsCode = new byte[prelude.length + js.length];
+        byte[] suffix = jsSuffix();
+        byte[] jsCode = new byte[prelude.length + js.length + suffix.length];
         System.arraycopy(prelude, 0, jsCode, 0, prelude.length);
         System.arraycopy(js, 0, jsCode, prelude.length, js.length);
+        System.arraycopy(suffix, 0, jsCode, prelude.length + js.length, suffix.length);
 
         var ptr =
                 exports.canonicalAbiRealloc(
@@ -226,6 +343,40 @@ public final class Engine implements AutoCloseable {
                     jsCode.length, // length
                     ALIGNMENT // alignement
                     );
+
+            // TODO: debug remove me
+            // System.out.println("Final JavaScript:\n" + new String(jsCode, UTF_8));
+
+            return aggregatedCodePtr; // 32 bit
+        } catch (TrapException e) {
+            throw new IllegalArgumentException(
+                    "Failed to compile JS code:\n" + new String(jsCode, UTF_8), e);
+        }
+    }
+
+    // TODO: can this be refactored?
+    public int compileRaw(byte[] js) {
+        byte[] jsCode = js;
+
+        var ptr =
+                exports.canonicalAbiRealloc(
+                        0, // original_ptr
+                        0, // original_size
+                        ALIGNMENT, // alignment
+                        jsCode.length // new size
+                        );
+
+        exports.memory().write(ptr, jsCode);
+        try {
+            var aggregatedCodePtr = exports.compileSrc(ptr, jsCode.length);
+            exports.canonicalAbiFree(
+                    ptr, // ptr
+                    jsCode.length, // length
+                    ALIGNMENT // alignement
+                    );
+
+            // TODO: debug remove me
+            //            System.out.println("Final JavaScript RAW:\n" + new String(jsCode, UTF_8));
 
             return aggregatedCodePtr; // 32 bit
         } catch (TrapException e) {
@@ -298,6 +449,7 @@ public final class Engine implements AutoCloseable {
 
     public static final class Builder {
         private List<Builtins> builtins = new ArrayList<>();
+        private List<Invokables> invokables = new ArrayList<>();
         private ObjectMapper mapper;
         private Function<MemoryLimits, Memory> memoryFactory;
 
@@ -305,6 +457,11 @@ public final class Engine implements AutoCloseable {
 
         public Builder addBuiltins(Builtins builtins) {
             this.builtins.add(builtins);
+            return this;
+        }
+
+        public Builder addInvokables(Invokables invokables) {
+            this.invokables.add(invokables);
             return this;
         }
 
@@ -330,7 +487,12 @@ public final class Engine implements AutoCloseable {
             for (var builtin : builtins) {
                 finalBuiltins.put(builtin.moduleName(), builtin);
             }
-            return new Engine(finalBuiltins, mapper, memoryFactory);
+            Map<String, Invokables> finalInvokables = new HashMap<>();
+            // TODO: any validation to be done here?
+            for (var invokable : invokables) {
+                finalInvokables.put(invokable.moduleName(), invokable);
+            }
+            return new Engine(finalBuiltins, finalInvokables, mapper, memoryFactory);
         }
     }
 }

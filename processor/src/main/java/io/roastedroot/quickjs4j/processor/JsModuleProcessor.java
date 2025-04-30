@@ -31,6 +31,7 @@ import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.printer.DefaultPrettyPrinter;
 import com.github.javaparser.printer.configuration.DefaultConfigurationOption;
 import com.github.javaparser.printer.configuration.DefaultPrinterConfiguration;
+import io.roastedroot.quickjs4j.annotations.GuestFunction;
 import io.roastedroot.quickjs4j.annotations.HostFunction;
 import io.roastedroot.quickjs4j.annotations.HostRefParam;
 import io.roastedroot.quickjs4j.annotations.JsModule;
@@ -41,7 +42,6 @@ import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.function.Function;
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.Filer;
 import javax.annotation.processing.Generated;
@@ -111,22 +111,19 @@ public final class JsModuleProcessor extends AbstractProcessor {
         return false;
     }
 
-    private static class GeneratedJsFunc {
-        final String name;
-        final Function<Integer, Expression> bodyGen;
-
-        GeneratedJsFunc(String name, Function<Integer, Expression> bodyGen) {
-            this.name = name;
-            this.bodyGen = bodyGen;
-        }
-    }
-
     private void processModule(TypeElement type) {
+        var moduleName = type.getAnnotation(JsModule.class).value();
+        if (moduleName.isEmpty()) {
+            moduleName = type.getSimpleName().toString();
+        }
+
         List<Expression> functions = new ArrayList<>();
-        int functionIndex = 0;
         for (Element member : elements().getAllMembers(type)) {
             if (member instanceof ExecutableElement && annotatedWith(member, HostFunction.class)) {
-                functions.add(processMethod((ExecutableElement) member, functionIndex++));
+                functions.add(processHostFunction((ExecutableElement) member));
+            } else if (member instanceof ExecutableElement
+                    && annotatedWith(member, GuestFunction.class)) {
+                functions.add(processGuestFunction((ExecutableElement) member, moduleName));
             }
         }
 
@@ -186,7 +183,14 @@ public final class JsModuleProcessor extends AbstractProcessor {
         return new FieldAccessExpr(new NameExpr(typeLiteral), "class");
     }
 
-    private Expression processMethod(ExecutableElement executable, int functionIndex) {
+    private Expression processGuestFunction(ExecutableElement executable, String moduleName) {
+        // compute function name
+        var name = executable.getAnnotation(GuestFunction.class).value();
+
+        return null;
+    }
+
+    private Expression processHostFunction(ExecutableElement executable) {
         // compute function name
         var name = executable.getAnnotation(HostFunction.class).value();
 
@@ -285,7 +289,6 @@ public final class JsModuleProcessor extends AbstractProcessor {
                 new ObjectCreationExpr()
                         .setType("HostFunction")
                         .addArgument(new StringLiteralExpr(name))
-                        .addArgument(new IntegerLiteralExpr(functionIndex))
                         .addArgument(new MethodCallExpr(new NameExpr("List"), "of", paramTypes))
                         .addArgument(returnType)
                         .addArgument(handle);
