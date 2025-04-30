@@ -6,7 +6,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+
+import java.io.File;
+import java.io.FileInputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -377,6 +381,40 @@ public class EngineTest {
         var codePtr = engine.compile(jsSource);
         engine.exec(codePtr);
         engine.free(codePtr);
+        engine.close();
+    }
+
+    @Test
+    public void useBundledLibrary() throws Exception {
+        var builtins =
+                Builtins.builder()
+                        .add(
+                                new HostFunction(
+                                        "log",
+                                        0,
+                                        List.of(String.class),
+                                        String.class,
+                                        (args) -> {
+                                            String str = (String) args.get(0);
+
+                                            System.out.println("LOG - " + str);
+                                            return str;
+                                        }))
+                        .build();
+        var engine = Engine.builder().withBuiltins(builtins).build();
+
+        var jsLibrarySource = new FileInputStream(new File("/home/aperuffo/workspace/chicory-js/e2e-example/src/main/resources/example/dist/out.js")).readAllBytes();
+
+        var libCodePtr = engine.compile(new String(jsLibrarySource, StandardCharsets.UTF_8) +
+                "\nglobalThis.jsDefinedFunctions = {};" +
+                "\nglobalThis.jsDefinedFunctions." + "pippo" + " = { add };");
+        engine.exec(libCodePtr);
+        engine.free(libCodePtr);
+
+        var userCodePtr = engine.compile("jsDefinedFunctions.pippo.add(1, 2);");
+        engine.exec(userCodePtr);
+        engine.free(userCodePtr);
+
         engine.close();
     }
 

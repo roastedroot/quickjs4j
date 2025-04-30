@@ -158,8 +158,9 @@ public final class Engine implements AutoCloseable {
         // TODO: verify JSON.parse
         for (int i = 0; i < builtins.size(); i++) {
             var fun = builtins.byIndex(i);
+            preludeBuilder.append("globalThis.javaBuiltins = {};\n");
             preludeBuilder.append(
-                    "globalThis."
+                    "globalThis.javaBuiltins."
                             + fun.name()
                             + " = (...args) => { return JSON.parse(java_invoke("
                             + fun.index()

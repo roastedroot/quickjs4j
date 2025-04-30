@@ -6,7 +6,7 @@ import io.roastedroot.quickjs4j.core.Builtins;
 import io.roastedroot.quickjs4j.core.Engine;
 import io.roastedroot.quickjs4j.core.Runner;
 
-@JsModule
+@JsModule("pippo")
 class ArtifactStore implements AutoCloseable {
     private final Runner runner;
 
@@ -20,10 +20,10 @@ class ArtifactStore implements AutoCloseable {
 
     public void add(Artifact artifact) {
         this.artifact = artifact;
-        runner.compileAndExec("set_validate_result(validate(get_pet()));");
+            runner.compileAndExec("set_validate_result(validate(get_artifact()));");
     }
 
-    @HostFunction("get_pet")
+    @HostFunction("get_artifact")
     public Artifact get() {
         return artifact;
     }
@@ -33,6 +33,12 @@ class ArtifactStore implements AutoCloseable {
     @HostFunction("set_validate_result")
     public void setValidate(boolean result) {
         validateResult = result;
+    }
+
+    @GuestFunction("add")
+    public void add(int one, int two) {
+        // implementation is generated
+        ArtifactStore_Impl.add(one, two);
     }
 
     @Override
