@@ -12,7 +12,7 @@ class ArtifactStoreTest {
     Artifact openapi = new Artifact("two", "openapi", "some openapi...");
 
     @Test
-    public void basicUage() {
+    public void basicUage() throws Exception {
         try (var artifactStore = new ArtifactStore()) {
 
             assertFalse(artifactStore.api().validate(raml));

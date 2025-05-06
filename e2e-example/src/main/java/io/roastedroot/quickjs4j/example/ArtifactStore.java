@@ -32,7 +32,7 @@ class ArtifactStore implements AutoCloseable {
         }
     }
 
-    public ArtifactStore() {
+    public ArtifactStore() throws IOException {
         this.javaApi = new JavaApi();
         var engine =
                 Engine.builder()
@@ -40,17 +40,12 @@ class ArtifactStore implements AutoCloseable {
                         .addInvokables(JsApi_Invokables.toInvokables())
                         .build();
         this.runner = Runner.builder().withEngine(engine).build();
-        String jsLibrary;
-        try {
-            jsLibrary =
-                    new String(
-                            ArtifactStore.class
-                                    .getResourceAsStream("/library/dist/out.js")
-                                    .readAllBytes(),
-                            StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        String jsLibrary =
+                new String(
+                        ArtifactStore.class
+                                .getResourceAsStream("/library/dist/out.js")
+                                .readAllBytes(),
+                        StandardCharsets.UTF_8);
 
         this.jsApi = JsApi_Invokables.create(jsLibrary, runner);
     }
