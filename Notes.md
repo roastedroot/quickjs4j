@@ -12,7 +12,8 @@ Things TODO:
 - improve JavaScript invocation from Java - On GOING
 - verify complex types with the GuestFunction interface
 - cleanup Invokable implementation
-- finish annotation processor generation for GuestFunction
+- finish annotation processor generation for GuestFunction - update docs!
+- verify HostRefs in GuestFunctions
 - emit the "java_api.mjs" stub to be used in JS
 
 - more tests for primitive types in annotation processor

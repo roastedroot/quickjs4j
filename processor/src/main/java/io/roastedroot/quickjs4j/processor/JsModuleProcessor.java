@@ -1,5 +1,6 @@
 package io.roastedroot.quickjs4j.processor;
 
+import static com.github.javaparser.StaticJavaParser.parseClassOrInterfaceType;
 import static com.github.javaparser.StaticJavaParser.parseType;
 import static com.github.javaparser.printer.configuration.DefaultPrinterConfiguration.ConfigOption.COLUMN_ALIGN_PARAMETERS;
 import static java.lang.String.format;
@@ -8,11 +9,13 @@ import static javax.tools.Diagnostic.Kind.NOTE;
 
 import com.github.javaparser.ast.ArrayCreationLevel;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.Modifier;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.ArrayCreationExpr;
 import com.github.javaparser.ast.expr.ArrayInitializerExpr;
+import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.CastExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
@@ -24,6 +27,7 @@ import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
+import com.github.javaparser.ast.expr.ThisExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
@@ -31,10 +35,11 @@ import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.printer.DefaultPrettyPrinter;
 import com.github.javaparser.printer.configuration.DefaultConfigurationOption;
 import com.github.javaparser.printer.configuration.DefaultPrinterConfiguration;
+import io.roastedroot.quickjs4j.annotations.Builtins;
 import io.roastedroot.quickjs4j.annotations.GuestFunction;
 import io.roastedroot.quickjs4j.annotations.HostFunction;
 import io.roastedroot.quickjs4j.annotations.HostRefParam;
-import io.roastedroot.quickjs4j.annotations.JsModule;
+import io.roastedroot.quickjs4j.annotations.Invokables;
 import io.roastedroot.quickjs4j.annotations.ReturnsHostRef;
 import java.io.IOException;
 import java.io.Writer;
@@ -94,15 +99,23 @@ public final class JsModuleProcessor extends AbstractProcessor {
 
     @Override
     public Set<String> getSupportedAnnotationTypes() {
-        return Set.of(JsModule.class.getName());
+        return Set.of(Builtins.class.getName());
     }
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-        for (Element element : roundEnv.getElementsAnnotatedWith(JsModule.class)) {
-            log(NOTE, "Generating Js bindings for " + element, null);
+        for (Element element : roundEnv.getElementsAnnotatedWith(Builtins.class)) {
+            log(NOTE, "Generating Builtins for " + element, null);
             try {
-                processModule((TypeElement) element);
+                processBuiltins((TypeElement) element);
+            } catch (AbortProcessingException e) {
+                // skip type
+            }
+        }
+        for (Element element : roundEnv.getElementsAnnotatedWith(Invokables.class)) {
+            log(NOTE, "Generating Invokables for " + element, null);
+            try {
+                processInvokables((TypeElement) element);
             } catch (AbortProcessingException e) {
                 // skip type
             }
@@ -111,19 +124,124 @@ public final class JsModuleProcessor extends AbstractProcessor {
         return false;
     }
 
-    private void processModule(TypeElement type) {
-        var moduleName = type.getAnnotation(JsModule.class).value();
+    private void processInvokables(TypeElement type) {
+        var moduleName = type.getAnnotation(Invokables.class).value();
         if (moduleName.isEmpty()) {
             moduleName = type.getSimpleName().toString();
+        }
+
+        var pkg = getPackageName(type);
+        var packageName = pkg.getQualifiedName().toString();
+        var cu = (pkg.isUnnamed()) ? new CompilationUnit() : new CompilationUnit(packageName);
+        if (!pkg.isUnnamed()) {
+            cu.setPackageDeclaration(packageName);
+            cu.addImport(type.getQualifiedName().toString());
+        }
+
+        cu.addImport("io.roastedroot.quickjs4j.core.Invokables");
+        cu.addImport("io.roastedroot.quickjs4j.core.GuestFunction");
+        // TODO: verify HostRefs in GuestFunctions
+        cu.addImport("io.roastedroot.quickjs4j.core.HostRef");
+        cu.addImport(List.class);
+
+        var typeName = type.getSimpleName().toString();
+        var processorName = new StringLiteralExpr(getClass().getName());
+        var className = typeName + "_Invokables";
+        var classDef =
+                cu.addClass(className)
+                        .setPublic(true)
+                        .setFinal(true)
+                        .addImplementedType(typeName)
+                        .addSingleMemberAnnotation(Generated.class, processorName);
+
+        classDef.addField(String.class, "jsLibrary", Modifier.Keyword.FINAL);
+
+        var constructor =
+                classDef.addConstructor().addParameter(String.class, "jsLibrary").setPrivate(true);
+
+        constructor
+                .createBody()
+                .addStatement(
+                        new AssignExpr(
+                                new FieldAccessExpr(new ThisExpr(), "jsLibrary"),
+                                new NameExpr("jsLibrary"),
+                                AssignExpr.Operator.ASSIGN));
+
+        // Too many issues, first write down all the code in RunnerTest
+        List<Expression> functions = new ArrayList<>();
+        for (Element member : elements().getAllMembers(type)) {
+            if (member instanceof ExecutableElement && annotatedWith(member, GuestFunction.class)) {
+                var name = member.getAnnotation(GuestFunction.class).value();
+
+                var methodBody =
+                        classDef.addMethod(member.getSimpleName().toString())
+                                .addAnnotation(Override.class)
+                                .createBody();
+
+                // TODO: go on from here implementing the interface
+
+                functions.add(processGuestFunction((ExecutableElement) member));
+            }
+        }
+
+        var newJsFunctions =
+                new ArrayCreationExpr(
+                        parseType("GuestFunction"),
+                        new NodeList<>(new ArrayCreationLevel()),
+                        new ArrayInitializerExpr(NodeList.nodeList(functions)));
+
+        var invokablesCreationHandle =
+                new MethodCallExpr(
+                        new MethodCallExpr(
+                                new MethodCallExpr(
+                                        new NameExpr("Invokables"),
+                                        new SimpleName("builder"),
+                                        NodeList.nodeList(new StringLiteralExpr(moduleName))),
+                                new SimpleName("add"),
+                                NodeList.nodeList(newJsFunctions)),
+                        new SimpleName("build"),
+                        NodeList.nodeList());
+
+        classDef.addMethod("toInvokables")
+                .setPublic(true)
+                .setStatic(true)
+                .setType("Invokables")
+                .setBody(new BlockStmt(new NodeList<>(new ReturnStmt(invokablesCreationHandle))));
+
+        classDef.addMethod("create")
+                .setPublic(true)
+                .setStatic(true)
+                .addParameter(String.class, "jsLibrary")
+                .setType(typeName)
+                .setBody(
+                        new BlockStmt(
+                                new NodeList<>(
+                                        new ReturnStmt(
+                                                new ObjectCreationExpr(
+                                                        null,
+                                                        parseClassOrInterfaceType(className),
+                                                        NodeList.nodeList(
+                                                                new NameExpr("jsLibrary")))))));
+
+        String prefix = (pkg.isUnnamed()) ? "" : packageName + ".";
+        String qualifiedName = prefix + type.getSimpleName() + "_Invokables";
+        try (Writer writer = filer().createSourceFile(qualifiedName, type).openWriter()) {
+            writer.write(cu.printer(printer()).toString());
+        } catch (IOException e) {
+            log(ERROR, format("Failed to create %s file: %s", qualifiedName, e), null);
+        }
+    }
+
+    private void processBuiltins(TypeElement type) {
+        var name = type.getAnnotation(Builtins.class).value();
+        if (name.isEmpty()) {
+            name = type.getSimpleName().toString();
         }
 
         List<Expression> functions = new ArrayList<>();
         for (Element member : elements().getAllMembers(type)) {
             if (member instanceof ExecutableElement && annotatedWith(member, HostFunction.class)) {
                 functions.add(processHostFunction((ExecutableElement) member));
-            } else if (member instanceof ExecutableElement
-                    && annotatedWith(member, GuestFunction.class)) {
-                functions.add(processGuestFunction((ExecutableElement) member, moduleName));
             }
         }
 
@@ -156,12 +274,24 @@ public final class JsModuleProcessor extends AbstractProcessor {
                         new NodeList<>(new ArrayCreationLevel()),
                         new ArrayInitializerExpr(NodeList.nodeList(functions)));
 
+        var builtinsCreationHandle =
+                new MethodCallExpr(
+                        new MethodCallExpr(
+                                new MethodCallExpr(
+                                        new NameExpr("Builtins"),
+                                        new SimpleName("builder"),
+                                        NodeList.nodeList(new StringLiteralExpr(name))),
+                                new SimpleName("add"),
+                                NodeList.nodeList(newJsFunctions)),
+                        new SimpleName("build"),
+                        NodeList.nodeList());
+
         classDef.addMethod("toBuiltins")
                 .setPublic(true)
                 .setStatic(true)
                 .addParameter(typeName, "jsModule")
-                .setType("HostFunction[]")
-                .setBody(new BlockStmt(new NodeList<>(new ReturnStmt(newJsFunctions))));
+                .setType("Builtins")
+                .setBody(new BlockStmt(new NodeList<>(new ReturnStmt(builtinsCreationHandle))));
 
         String prefix = (pkg.isUnnamed()) ? "" : packageName + ".";
         String qualifiedName = prefix + type.getSimpleName() + "_Builtins";
@@ -183,11 +313,43 @@ public final class JsModuleProcessor extends AbstractProcessor {
         return new FieldAccessExpr(new NameExpr(typeLiteral), "class");
     }
 
-    private Expression processGuestFunction(ExecutableElement executable, String moduleName) {
-        // compute function name
-        var name = executable.getAnnotation(GuestFunction.class).value();
+    private boolean extractHasReturn(ExecutableElement executable) {
+        String returnName = executable.getReturnType().toString();
+        return !returnName.equals("void");
+    }
 
-        return null;
+    private Expression extractReturn(ExecutableElement executable) {
+        String returnName = executable.getReturnType().toString();
+        Expression returnType;
+        switch (returnName) {
+            case "void":
+                returnType = new FieldAccessExpr(new NameExpr("java.lang.Void"), "class");
+                break;
+            case "int":
+                returnType = addPrimitiveReturn("java.lang.Integer");
+                break;
+            case "long":
+                returnType = addPrimitiveReturn("java.lang.Long");
+                break;
+            case "double":
+                returnType = addPrimitiveReturn("java.lang.Double");
+                break;
+            case "float":
+                returnType = addPrimitiveReturn("java.lang.Float");
+                break;
+            case "boolean":
+                returnType = addPrimitiveReturn("java.lang.Boolean");
+                break;
+            default:
+                if (annotatedWith(executable, ReturnsHostRef.class)) {
+                    var javaRefType = "io.roastedroot.quickjs4j.core.HostRef";
+                    returnType = new FieldAccessExpr(new NameExpr(javaRefType), "class");
+                } else {
+                    returnType = new FieldAccessExpr(new NameExpr(returnName), "class");
+                }
+                break;
+        }
+        return returnType;
     }
 
     private Expression processHostFunction(ExecutableElement executable) {
@@ -196,6 +358,7 @@ public final class JsModuleProcessor extends AbstractProcessor {
 
         // compute parameter types and argument conversions
         NodeList<Expression> paramTypes = new NodeList<>();
+        // duplicated to automatically compute arguments
         NodeList<Expression> arguments = new NodeList<>();
         for (VariableElement parameter : executable.getParameters()) {
             switch (parameter.asType().toString()) {
@@ -228,38 +391,8 @@ public final class JsModuleProcessor extends AbstractProcessor {
         }
 
         // compute return type and conversion
-        String returnName = executable.getReturnType().toString();
-        Expression returnType;
-        boolean hasReturn = true;
-        switch (returnName) {
-            case "void":
-                returnType = new FieldAccessExpr(new NameExpr("java.lang.Void"), "class");
-                hasReturn = false;
-                break;
-            case "int":
-                returnType = addPrimitiveReturn("java.lang.Integer");
-                break;
-            case "long":
-                returnType = addPrimitiveReturn("java.lang.Long");
-                break;
-            case "double":
-                returnType = addPrimitiveReturn("java.lang.Double");
-                break;
-            case "float":
-                returnType = addPrimitiveReturn("java.lang.Float");
-                break;
-            case "boolean":
-                returnType = addPrimitiveReturn("java.lang.Boolean");
-                break;
-            default:
-                if (annotatedWith(executable, ReturnsHostRef.class)) {
-                    var javaRefType = "io.roastedroot.quickjs4j.core.HostRef";
-                    returnType = new FieldAccessExpr(new NameExpr(javaRefType), "class");
-                } else {
-                    returnType = new FieldAccessExpr(new NameExpr(returnName), "class");
-                }
-                break;
-        }
+        Expression returnType = extractReturn(executable);
+        boolean hasReturn = extractHasReturn(executable);
 
         // function invocation
         Expression invocation =
@@ -271,7 +404,9 @@ public final class JsModuleProcessor extends AbstractProcessor {
         if (!hasReturn) {
             handleBody.addStatement(invocation).addStatement(new ReturnStmt(new NullLiteralExpr()));
         } else {
-            var result = new VariableDeclarator(parseType(returnName), "result", invocation);
+            var result =
+                    new VariableDeclarator(
+                            parseType(executable.getReturnType().toString()), "result", invocation);
             handleBody
                     .addStatement(new ExpressionStmt(new VariableDeclarationExpr(result)))
                     .addStatement(new ReturnStmt(new NameExpr("result")));
@@ -292,6 +427,62 @@ public final class JsModuleProcessor extends AbstractProcessor {
                         .addArgument(new MethodCallExpr(new NameExpr("List"), "of", paramTypes))
                         .addArgument(returnType)
                         .addArgument(handle);
+
+        function.setLineComment("");
+        return function;
+    }
+
+    NodeList<Expression> extractParameters(ExecutableElement executable) {
+        // compute parameter types and argument conversions
+        NodeList<Expression> paramTypes = new NodeList<>();
+        for (VariableElement parameter : executable.getParameters()) {
+            switch (parameter.asType().toString()) {
+                case "int":
+                    paramTypes.add(new FieldAccessExpr(new NameExpr("java.lang.Integer"), "class"));
+                    break;
+                case "long":
+                    paramTypes.add(new FieldAccessExpr(new NameExpr("java.lang.Long"), "class"));
+                    break;
+                case "double":
+                    paramTypes.add(new FieldAccessExpr(new NameExpr("java.lang.Double"), "class"));
+                    break;
+                case "float":
+                    paramTypes.add(new FieldAccessExpr(new NameExpr("java.lang.Float"), "class"));
+                    break;
+                case "boolean":
+                    paramTypes.add(new FieldAccessExpr(new NameExpr("java.lang.Boolean"), "class"));
+                    break;
+                default:
+                    var typeLiteral = parameter.asType().toString();
+                    if (annotatedWith(parameter, HostRefParam.class)) {
+                        var javaRefType = "io.roastedroot.quickjs4j.core.HostRef";
+                        paramTypes.add(new FieldAccessExpr(new NameExpr(javaRefType), "class"));
+                    } else {
+                        paramTypes.add(new FieldAccessExpr(new NameExpr(typeLiteral), "class"));
+                    }
+            }
+        }
+        return paramTypes;
+    }
+
+    private Expression processGuestFunction(ExecutableElement executable) {
+        // compute function name
+        var name = executable.getAnnotation(GuestFunction.class).value();
+
+        // compute parameter types and argument conversions
+        NodeList<Expression> paramTypes = extractParameters(executable);
+
+        // compute return type and conversion
+        String returnName = executable.getReturnType().toString();
+        Expression returnType = extractReturn(executable);
+
+        // create Js function
+        var function =
+                new ObjectCreationExpr()
+                        .setType("GuestFunction")
+                        .addArgument(new StringLiteralExpr(name))
+                        .addArgument(new MethodCallExpr(new NameExpr("List"), "of", paramTypes))
+                        .addArgument(returnType);
 
         function.setLineComment("");
         return function;

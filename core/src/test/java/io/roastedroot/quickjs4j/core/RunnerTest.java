@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
@@ -31,6 +32,48 @@ public class RunnerTest {
 
         // Assert
         assertTrue(invoked.get());
+
+        runner.close();
+    }
+
+    @Test
+    public void fullUsage() {
+        // Arrange
+        var invoked = new AtomicBoolean(false);
+        var builtins =
+                Builtins.builder("from_java")
+                        .addIntToVoid(
+                                "java_check",
+                                (num) -> {
+                                    assertEquals(42, num);
+                                    invoked.set(true);
+                                })
+                        .build();
+
+        var invokables =
+                Invokables.builder("from_js")
+                        .add(
+                                new GuestFunction(
+                                        "js_func",
+                                        List.of(Integer.class, Integer.class),
+                                        Integer.class))
+                        .build();
+
+        var libraryCode = "function js_func(x, y) { from_java.java_check(x); return x * y; };";
+
+        var jsEngine = Engine.builder().addBuiltins(builtins).addInvokables(invokables).build();
+
+        var runner = Runner.builder().withEngine(jsEngine).build();
+
+        // Act
+        var result =
+                (Integer)
+                        runner.invokeGuestFunction(
+                                "from_js", "js_func", List.of(42, 2), libraryCode);
+
+        // Assert
+        assertTrue(invoked.get());
+        assertEquals(84, result);
 
         runner.close();
     }

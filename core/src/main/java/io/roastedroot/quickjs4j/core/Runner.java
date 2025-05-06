@@ -1,6 +1,7 @@
 package io.roastedroot.quickjs4j.core;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -61,6 +62,11 @@ public final class Runner implements AutoCloseable {
     public void compileAndExec(String code) {
         var compiled = compile(code);
         exec(compiled);
+    }
+
+    public Object invokeGuestFunction(
+            String moduleName, String name, List<Object> args, String libraryCode) {
+        return engine.invokeGuestFunction(moduleName, name, args, libraryCode);
     }
 
     @Override

@@ -57,16 +57,11 @@ public class EngineTest {
 
     @Test
     public void callJavaFunctionsFromJS() {
-        var builtins =
-                Builtins.builder("java")
-                        .addIntIntToInt("add", EngineTest::add)
-                        // .addIntToVoid("check", EngineTest.check(42))
-                        .build();
+        var builtins = Builtins.builder("java").addIntIntToInt("add", EngineTest::add).build();
 
         var engine = Engine.builder().build().builder().addBuiltins(builtins).build();
 
         var codePtr = engine.compile("java.add(40, 1);");
-        // var codePtr = engine.compile("from_java.check(from_java.add(40, 2));");
         engine.exec(codePtr);
         engine.free(codePtr);
         engine.close();
