@@ -138,6 +138,7 @@ public final class JsModuleProcessor extends AbstractProcessor {
             cu.addImport(type.getQualifiedName().toString());
         }
 
+        cu.addImport("io.roastedroot.quickjs4j.core.Runner");
         cu.addImport("io.roastedroot.quickjs4j.core.Invokables");
         cu.addImport("io.roastedroot.quickjs4j.core.GuestFunction");
         // TODO: verify HostRefs in GuestFunctions
@@ -155,9 +156,13 @@ public final class JsModuleProcessor extends AbstractProcessor {
                         .addSingleMemberAnnotation(Generated.class, processorName);
 
         classDef.addField(String.class, "jsLibrary", Modifier.Keyword.FINAL);
+        classDef.addField("io.roastedroot.quickjs4j.core.Runner", "runner", Modifier.Keyword.FINAL);
 
         var constructor =
-                classDef.addConstructor().addParameter(String.class, "jsLibrary").setPrivate(true);
+                classDef.addConstructor()
+                        .addParameter(String.class, "jsLibrary")
+                        .addParameter("io.roastedroot.quickjs4j.core.Runner", "runner")
+                        .setPrivate(true);
 
         constructor
                 .createBody()
@@ -165,20 +170,56 @@ public final class JsModuleProcessor extends AbstractProcessor {
                         new AssignExpr(
                                 new FieldAccessExpr(new ThisExpr(), "jsLibrary"),
                                 new NameExpr("jsLibrary"),
+                                AssignExpr.Operator.ASSIGN))
+                .addStatement(
+                        new AssignExpr(
+                                new FieldAccessExpr(new ThisExpr(), "runner"),
+                                new NameExpr("runner"),
                                 AssignExpr.Operator.ASSIGN));
 
-        // Too many issues, first write down all the code in RunnerTest
         List<Expression> functions = new ArrayList<>();
         for (Element member : elements().getAllMembers(type)) {
             if (member instanceof ExecutableElement && annotatedWith(member, GuestFunction.class)) {
                 var name = member.getAnnotation(GuestFunction.class).value();
 
-                var methodBody =
-                        classDef.addMethod(member.getSimpleName().toString())
-                                .addAnnotation(Override.class)
-                                .createBody();
+                var executable = (ExecutableElement) member;
 
-                // TODO: go on from here implementing the interface
+                var overriddenMethod =
+                        classDef.addMethod(
+                                        member.getSimpleName().toString(), Modifier.Keyword.PUBLIC)
+                                .addAnnotation(Override.class);
+
+                NodeList<Expression> arguments = NodeList.nodeList();
+                for (int i = 0; i < executable.getParameters().size(); i++) {
+                    overriddenMethod.addParameter(
+                            executable.getParameters().get(i).asType().toString(), "arg" + i);
+                    arguments.add(new NameExpr("arg" + i));
+                }
+                var argsList =
+                        new MethodCallExpr(new NameExpr("List"), new SimpleName("of"), arguments);
+
+                var methodBody = overriddenMethod.createBody();
+
+                var invocationHandle =
+                        new MethodCallExpr(
+                                new NameExpr("runner"),
+                                new SimpleName("invokeGuestFunction"),
+                                NodeList.nodeList(
+                                        new StringLiteralExpr(moduleName),
+                                        new StringLiteralExpr(name),
+                                        argsList,
+                                        new NameExpr("jsLibrary")));
+
+                var hasReturn = extractHasReturn(executable);
+                if (hasReturn) {
+                    var returnType = parseType(executable.getReturnType().toString());
+                    overriddenMethod.setType(returnType);
+                    methodBody.addStatement(
+                            new ReturnStmt(new CastExpr(returnType, invocationHandle)));
+                } else {
+                    methodBody.addStatement(invocationHandle);
+                    methodBody.addStatement(new ReturnStmt(new NullLiteralExpr()));
+                }
 
                 functions.add(processGuestFunction((ExecutableElement) member));
             }
@@ -212,6 +253,7 @@ public final class JsModuleProcessor extends AbstractProcessor {
                 .setPublic(true)
                 .setStatic(true)
                 .addParameter(String.class, "jsLibrary")
+                .addParameter("io.roastedroot.quickjs4j.core.Runner", "runner")
                 .setType(typeName)
                 .setBody(
                         new BlockStmt(
@@ -221,7 +263,8 @@ public final class JsModuleProcessor extends AbstractProcessor {
                                                         null,
                                                         parseClassOrInterfaceType(className),
                                                         NodeList.nodeList(
-                                                                new NameExpr("jsLibrary")))))));
+                                                                new NameExpr("jsLibrary"),
+                                                                new NameExpr("runner")))))));
 
         String prefix = (pkg.isUnnamed()) ? "" : packageName + ".";
         String qualifiedName = prefix + type.getSimpleName() + "_Invokables";

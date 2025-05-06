@@ -54,22 +54,22 @@ class HelloJsTest {
     }
 
     class JsTest {
+        // the Java API
+        private final JavaApi javaApi;
         // Sandbox
         private final Runner runner;
-
-        // the Java API
-        private final JavaApi javaApi = new JavaApi();
-
         // the JS API
-        private final JsApi jsApi = JsApi_Invokables.create(JS_LIBRARY_CODE);
+        private final JsApi jsApi;
 
         JsTest() {
+            this.javaApi = new JavaApi();
             var engine =
                     Engine.builder()
-                            .addBuiltins(JavaApi_Builtins.toBuiltins(javaApi))
+                            .addBuiltins(JavaApi_Builtins.toBuiltins(this.javaApi))
                             .addInvokables(JsApi_Invokables.toInvokables())
                             .build();
             this.runner = Runner.builder().withEngine(engine).build();
+            this.jsApi = JsApi_Invokables.create(JS_LIBRARY_CODE, runner);
         }
 
         public void exec(String code) {
@@ -95,7 +95,7 @@ class HelloJsTest {
         var helloJs = new JsTest();
 
         // Act
-        helloJs.exec("my_js.my_java_check(my_js.my_java_func(40, 2));");
+        helloJs.exec("from_java.my_java_check(from_java.my_java_func(40, 2));");
 
         // Assert
         assertTrue(helloJs.isInvoked());
@@ -107,7 +107,7 @@ class HelloJsTest {
         var helloJs = new JsTest();
 
         // Act
-        helloJs.exec("my_js.my_java_ref_check(my_js.my_java_ref());");
+        helloJs.exec("from_java.my_java_ref_check(from_java.my_java_ref());");
 
         // assert
         assertTrue(helloJs.isRefInvoked());

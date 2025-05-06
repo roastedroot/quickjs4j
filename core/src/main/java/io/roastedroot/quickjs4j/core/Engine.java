@@ -282,11 +282,9 @@ public final class Engine implements AutoCloseable {
 
     public int compile(byte[] js) {
         byte[] prelude = jsPrelude();
-        byte[] suffix = jsSuffix();
-        byte[] jsCode = new byte[prelude.length + js.length + suffix.length];
+        byte[] jsCode = new byte[prelude.length + js.length];
         System.arraycopy(prelude, 0, jsCode, 0, prelude.length);
         System.arraycopy(js, 0, jsCode, prelude.length, js.length);
-        System.arraycopy(suffix, 0, jsCode, prelude.length + js.length, suffix.length);
 
         return compileRaw(jsCode);
     }
