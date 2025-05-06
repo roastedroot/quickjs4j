@@ -1,7 +1,6 @@
-const yaml = require('yaml');
 
-function validate(artifact) {
+export function validate(artifact) {
+    apicurio.log(artifact.name);
 
+    return (artifact.type === "openapi");
 }
-// TODO: let's define the UX and tight things up
-globalThis.validate = (artifact) => validate(artifact);
