@@ -1,6 +1,8 @@
 
+import { log } from "./apicurio.mjs";
+
 export function validate(artifact) {
-    apicurio.log(artifact.name);
+    log(artifact.name);
 
     return (artifact.type === "openapi");
 }
