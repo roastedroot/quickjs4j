@@ -414,6 +414,9 @@ public final class JsModuleProcessor extends AbstractProcessor {
             ExecutableElement executable, String moduleName, StringBuilder mjsBuilder) {
         // compute function name
         var name = executable.getAnnotation(HostFunction.class).value();
+        if (name.isEmpty()) {
+            name = executable.getSimpleName().toString();
+        }
 
         // compute parameter types and argument conversions
         NodeList<Expression> paramTypes = new NodeList<>();
@@ -545,6 +548,9 @@ public final class JsModuleProcessor extends AbstractProcessor {
     private Expression processGuestFunction(ExecutableElement executable) {
         // compute function name
         var name = executable.getAnnotation(GuestFunction.class).value();
+        if (name.isEmpty()) {
+            name = executable.getSimpleName().toString();
+        }
 
         // compute parameter types and argument conversions
         NodeList<Expression> paramTypes = extractParameters(executable);
