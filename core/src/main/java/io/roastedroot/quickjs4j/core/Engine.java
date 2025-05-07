@@ -64,7 +64,14 @@ public final class Engine implements AutoCloseable {
                 if (i > 0) {
                     paramsStr.append(", ");
                 }
-                paramsStr.append(mapper.writeValueAsString(args.get(i)));
+                var clazz = guestFunction.paramTypes().get(i);
+                if (clazz == HostRef.class) {
+                    javaRefs.add(args.get(i));
+                    var ptr = javaRefs.size() - 1;
+                    paramsStr.append(mapper.writeValueAsString(ptr));
+                } else {
+                    paramsStr.append(mapper.writeValueAsString(args.get(i)));
+                }
             }
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);

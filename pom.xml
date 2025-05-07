@@ -22,7 +22,6 @@
   <modules>
     <module>annotations</module>
     <module>core</module>
-    <module>e2e-example</module>
     <module>it</module>
     <module>processor</module>
   </modules>
