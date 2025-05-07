@@ -14,6 +14,8 @@ Things TODO:
 - cleanup Invokable implementation
 - finish annotation processor generation for GuestFunction - update docs!
 - verify HostRefs in GuestFunctions
+- GuestFunctions/HostFunctions default name
+- @Invokables(allMethods = true) / @Builtins
 - emit the "java_api.mjs" stub to be used in JS
 
 - more tests for primitive types in annotation processor
