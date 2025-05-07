@@ -242,4 +242,40 @@ public class RunnerTest {
 
         runner.close();
     }
+
+    @Test
+    public void handleExceptionsThrownInJava() {
+        var builtins =
+                Builtins.builder("from_java")
+                        .addStringToString(
+                                "imported_function",
+                                (str) -> {
+                                    throw new IndexOutOfBoundsException("whatever");
+                                })
+                        .build();
+        var engine = Engine.builder().addBuiltins(builtins).build();
+        var runner = Runner.builder().withEngine(engine).build();
+
+        var exception =
+                assertThrows(
+                        IndexOutOfBoundsException.class,
+                        () -> runner.compileAndExec("from_java.imported_function(\"ciao\");"));
+
+        assertEquals("whatever", exception.getMessage());
+
+        runner.close();
+    }
+
+    @Test
+    public void failToCompileJs() {
+        var engine = Engine.builder().build();
+        var runner = Runner.builder().withEngine(engine).build();
+
+        var exception =
+                assertThrows(IllegalArgumentException.class, () -> runner.compile("1' \" 2 ..."));
+
+        assertTrue(exception.getMessage().contains("Failed to compile JS code"));
+
+        engine.close();
+    }
 }

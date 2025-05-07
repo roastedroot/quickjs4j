@@ -511,4 +511,54 @@ public class EngineTest {
         runtimeEngine.free(runtimeCodePtr);
         runtimeEngine.close();
     }
+
+    @Test
+    public void handleExceptionsThrownInJava() {
+        var builtins =
+                Builtins.builder("from_java")
+                        .addStringToString(
+                                "imported_function",
+                                (str) -> {
+                                    throw new IndexOutOfBoundsException("whatever");
+                                })
+                        .build();
+        var engine = Engine.builder().addBuiltins(builtins).build();
+
+        // Act
+        var codePtr = engine.compile("from_java.imported_function(\"ciao\");");
+
+        var exception = assertThrows(IndexOutOfBoundsException.class, () -> engine.exec(codePtr));
+
+        assertEquals("whatever", exception.getMessage());
+
+        engine.free(codePtr);
+        engine.close();
+    }
+
+    @Test
+    public void handleExceptionsThrownInJs() {
+        var engine = Engine.builder().build();
+
+        // Act
+        var codePtr = engine.compile("throw \"hello exception\";");
+
+        var exception = assertThrows(GuestException.class, () -> engine.exec(codePtr));
+
+        assertTrue(exception.getMessage().contains("hello exception"));
+
+        engine.free(codePtr);
+        engine.close();
+    }
+
+    @Test
+    public void failToCompileJs() {
+        var engine = Engine.builder().build();
+
+        var exception =
+                assertThrows(IllegalArgumentException.class, () -> engine.compile("1' \" 2 ..."));
+
+        assertTrue(exception.getMessage().contains("Failed to compile JS code"));
+
+        engine.close();
+    }
 }

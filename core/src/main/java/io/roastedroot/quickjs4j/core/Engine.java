@@ -16,6 +16,8 @@ import com.dylibso.chicory.wasm.types.ValueType;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -28,7 +30,10 @@ public final class Engine implements AutoCloseable {
     private static final int ALIGNMENT = 1;
     public static final ObjectMapper DEFAULT_OBJECT_MAPPER = new ObjectMapper();
 
-    private final WasiOptions wasiOpts = WasiOptions.builder().inheritSystem().build();
+    private final ByteArrayOutputStream stdout = new ByteArrayOutputStream();
+    private final ByteArrayOutputStream stderr = new ByteArrayOutputStream();
+    private final WasiOptions wasiOpts =
+            WasiOptions.builder().withStdout(stdout).withStderr(stderr).build();
     private final WasiPreview1 wasi = WasiPreview1.builder().withOptions(wasiOpts).build();
     private final Instance instance;
     private final Engine_ModuleExports exports;
@@ -94,7 +99,7 @@ public final class Engine implements AutoCloseable {
                             + "."
                             + guestFunction.name()
                             + "("
-                            + paramsStr.toString()
+                            + paramsStr
                             + "));";
             codePtr = compileRaw(jsCode.getBytes(UTF_8));
             exec(codePtr);
@@ -321,8 +326,21 @@ public final class Engine implements AutoCloseable {
 
             return aggregatedCodePtr; // 32 bit
         } catch (TrapException e) {
+            try {
+                stderr.flush();
+                stdout.flush();
+            } catch (IOException ex) {
+                throw new RuntimeException("Failed to flush stdout/stderr");
+            }
+
             throw new IllegalArgumentException(
-                    "Failed to compile JS code:\n" + new String(jsCode, UTF_8), e);
+                    "Failed to compile JS code:\n"
+                            + new String(jsCode, UTF_8)
+                            + "\nstderr: "
+                            + stderr.toString(UTF_8)
+                            + "\nstdout: "
+                            + stdout.toString(UTF_8),
+                    e);
         }
     }
 
@@ -330,12 +348,27 @@ public final class Engine implements AutoCloseable {
         var ptr = exports.memory().readInt(codePtr);
         var codeLength = exports.memory().readInt(codePtr + 4);
 
-        exports.invoke(
-                ptr, // bytecode_ptr
-                codeLength, // bytecode_len
-                0, // fn_name_ptr
-                0 // fn_name_len
-                );
+        try {
+            exports.invoke(
+                    ptr, // bytecode_ptr
+                    codeLength, // bytecode_len
+                    0, // fn_name_ptr
+                    0 // fn_name_len
+                    );
+        } catch (TrapException e) {
+            try {
+                stderr.flush();
+                stdout.flush();
+            } catch (IOException ex) {
+                throw new RuntimeException("Failed to flush stdout/stderr");
+            }
+
+            throw new GuestException(
+                    "An exception occurred during the execution.\nstderr: "
+                            + stderr.toString(UTF_8)
+                            + "\nstdout: "
+                            + stdout.toString(UTF_8));
+        }
     }
 
     public void free(int codePtr) {
