@@ -17,7 +17,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -31,7 +33,8 @@ public final class Engine implements AutoCloseable {
     private final Instance instance;
     private final Engine_ModuleExports exports;
 
-    private final Builtins builtins;
+    private final Map<String, Builtins> builtins;
+    private final Map<String, Invokables> invokables;
     private final ObjectMapper mapper;
 
     private final List<Object> javaRefs = new ArrayList<>();
@@ -40,20 +43,76 @@ public final class Engine implements AutoCloseable {
         return new Builder();
     }
 
-    private long[] invoke(Instance instance, long[] args) {
-        int builtinPtr = (int) args[0];
-
-        int ptr = (int) args[1];
-        int len = (int) args[2];
-
+    private String readJavyString(int ptr, int len) {
         var bytes = instance.memory().readBytes(ptr, len);
-        this.exports.canonicalAbiFree(ptr, len, ALIGNMENT);
-        var argsString = new String(bytes, UTF_8);
+        return new String(bytes, UTF_8);
+    }
 
-        var receiver = builtins.byIndex(builtinPtr);
-        if (receiver == null) {
-            throw new IllegalArgumentException("Failed to find builtin at index " + builtinPtr);
+    public Object invokeGuestFunction(
+            String moduleName, String name, List<Object> args, String libraryCode) {
+        GuestFunction guestFunction = invokables.get(moduleName).byName(name);
+        if (guestFunction.paramTypes().size() != args.size()) {
+            throw new IllegalArgumentException(
+                    "Guest function should be invoked with the expected "
+                            + guestFunction.paramTypes().size()
+                            + " params, but got: "
+                            + args.size());
         }
+        StringBuilder paramsStr = new StringBuilder();
+        try {
+            for (int i = 0; i < args.size(); i++) {
+                if (i > 0) {
+                    paramsStr.append(", ");
+                }
+                paramsStr.append(mapper.writeValueAsString(args.get(i)));
+            }
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+
+        int codePtr = 0;
+        try {
+            String jsCode =
+                    new String(jsPrelude(), UTF_8)
+                            + "\n"
+                            + libraryCode
+                            + "\n"
+                            + new String(jsSuffix(), UTF_8)
+                            + "\n"
+                            + moduleName
+                            + "."
+                            + guestFunction.setResultFunName()
+                            + "("
+                            + moduleName
+                            + "."
+                            + guestFunction.name()
+                            + "("
+                            + paramsStr.toString()
+                            + "));";
+            codePtr = compileRaw(jsCode.getBytes(UTF_8));
+            exec(codePtr);
+        } finally {
+            if (codePtr != 0) {
+                free(codePtr);
+            }
+        }
+
+        return invokables.get(moduleName).byName(name).getResult();
+    }
+
+    private long[] invokeBuiltin(Instance instance, long[] args) {
+        String moduleName = readJavyString((int) args[0], (int) args[1]);
+        String funcName = readJavyString((int) args[2], (int) args[3]);
+        String argsString = readJavyString((int) args[4], (int) args[5]);
+
+        if (!builtins.containsKey(moduleName)) {
+            throw new IllegalArgumentException("Failed to find builtin module name " + moduleName);
+        }
+        if (builtins.get(moduleName).byName(funcName) == null) {
+            throw new IllegalArgumentException(
+                    "Failed to find function with name " + funcName + " in module " + moduleName);
+        }
+        var receiver = builtins.get(moduleName).byName(funcName);
 
         var argsList = new ArrayList<>();
         try {
@@ -63,11 +122,13 @@ public final class Engine implements AutoCloseable {
                 throw new IllegalArgumentException(
                         "Function "
                                 + receiver.name()
-                                + " has been invoked with the incorrect number of parameters needs:"
-                                + " "
+                                + " has been invoked with the incorrect number of parameters"
+                                + " needs: "
                                 + receiver.paramTypes().stream()
                                         .map(Class::getCanonicalName)
-                                        .collect(Collectors.joining(", ")));
+                                        .collect(Collectors.joining(", "))
+                                + ", found: "
+                                + tree.size());
             }
 
             for (int i = 0; i < tree.size(); i++) {
@@ -95,7 +156,10 @@ public final class Engine implements AutoCloseable {
                 }
             }
 
-            var returnStr = mapper.writerFor(returnType).writeValueAsString(res);
+            var returnStr =
+                    (returnType == Void.class)
+                            ? "null"
+                            : mapper.writerFor(returnType).writeValueAsString(res);
             var returnBytes = returnStr.getBytes();
 
             var returnPtr =
@@ -129,14 +193,34 @@ public final class Engine implements AutoCloseable {
             new HostFunction(
                     "chicory",
                     "invoke",
-                    List.of(ValueType.I32, ValueType.I32, ValueType.I32),
+                    List.of(
+                            ValueType.I32,
+                            ValueType.I32,
+                            ValueType.I32,
+                            ValueType.I32,
+                            ValueType.I32,
+                            ValueType.I32),
                     List.of(ValueType.I32),
-                    this::invoke);
+                    this::invokeBuiltin);
 
     private Engine(
-            Builtins builtins, ObjectMapper mapper, Function<MemoryLimits, Memory> memoryFactory) {
+            Map<String, Builtins> builtins,
+            Map<String, Invokables> invokables,
+            ObjectMapper mapper,
+            Function<MemoryLimits, Memory> memoryFactory) {
         this.mapper = mapper;
         this.builtins = builtins;
+        // set_result builtins
+        invokables.entrySet().stream()
+                .forEach(
+                        e -> {
+                            var builder = Builtins.builder(e.getKey());
+                            e.getValue()
+                                    .functions()
+                                    .forEach(entry -> builder.add(entry.setResultHostFunction()));
+                            this.builtins.put(e.getKey(), builder.build());
+                        });
+        this.invokables = invokables;
         instance =
                 Instance.builder(JavyPluginModule.load())
                         .withMemoryFactory(memoryFactory)
@@ -151,21 +235,45 @@ public final class Engine implements AutoCloseable {
         exports.initializeRuntime();
     }
 
-    // This function is used to dynamically generate the bindings defined by the Builtins
+    // This function dynamically generates the global functions defined by the Builtins
     private byte[] jsPrelude() {
         var preludeBuilder = new StringBuilder();
-        // TODO: if this grows I need a JS writer something
-        // TODO: verify JSON.parse
-        for (int i = 0; i < builtins.size(); i++) {
-            var fun = builtins.byIndex(i);
-            preludeBuilder.append(
-                    "globalThis."
-                            + fun.name()
-                            + " = (...args) => { return JSON.parse(java_invoke("
-                            + fun.index()
-                            + ", JSON.stringify(args) ) ) };\n");
+        for (Map.Entry<String, Builtins> builtin : builtins.entrySet()) {
+            preludeBuilder.append("globalThis." + builtin.getKey() + " = {};\n");
+            for (var func : builtins.get(builtin.getKey()).functions()) {
+                preludeBuilder.append(
+                        "globalThis."
+                                + builtin.getKey()
+                                + "."
+                                + func.name()
+                                + " = (...args) => { return JSON.parse(java_invoke(\""
+                                + builtin.getKey()
+                                + "\", \""
+                                + func.name()
+                                + "\", JSON.stringify(args))) };\n");
+            }
         }
         return preludeBuilder.toString().getBytes();
+    }
+
+    // This function dynamically generates the js handlers for Invokables
+    private byte[] jsSuffix() {
+        var suffixBuilder = new StringBuilder();
+        for (Map.Entry<String, Invokables> invokable : invokables.entrySet()) {
+            // The object is already defined by the set_result, just add the handlers
+            for (var func : invokables.get(invokable.getKey()).functions()) {
+                // exporting to global the functions
+                suffixBuilder.append(
+                        "globalThis."
+                                + invokable.getKey()
+                                + "."
+                                + func.name()
+                                + " = "
+                                + func.globalName()
+                                + ";\n");
+            }
+        }
+        return suffixBuilder.toString().getBytes();
     }
 
     public int compile(String js) {
@@ -177,6 +285,12 @@ public final class Engine implements AutoCloseable {
         byte[] jsCode = new byte[prelude.length + js.length];
         System.arraycopy(prelude, 0, jsCode, 0, prelude.length);
         System.arraycopy(js, 0, jsCode, prelude.length, js.length);
+
+        return compileRaw(jsCode);
+    }
+
+    public int compileRaw(byte[] js) {
+        byte[] jsCode = js;
 
         var ptr =
                 exports.canonicalAbiRealloc(
@@ -194,6 +308,9 @@ public final class Engine implements AutoCloseable {
                     jsCode.length, // length
                     ALIGNMENT // alignement
                     );
+
+            // TODO: debug
+            // System.out.println("Final JavaScript RAW:\n" + new String(jsCode, UTF_8));
 
             return aggregatedCodePtr; // 32 bit
         } catch (TrapException e) {
@@ -265,14 +382,20 @@ public final class Engine implements AutoCloseable {
     }
 
     public static final class Builder {
-        private Builtins builtins;
+        private List<Builtins> builtins = new ArrayList<>();
+        private List<Invokables> invokables = new ArrayList<>();
         private ObjectMapper mapper;
         private Function<MemoryLimits, Memory> memoryFactory;
 
         private Builder() {}
 
-        public Builder withBuiltins(Builtins builtins) {
-            this.builtins = builtins;
+        public Builder addBuiltins(Builtins builtins) {
+            this.builtins.add(builtins);
+            return this;
+        }
+
+        public Builder addInvokables(Invokables invokables) {
+            this.invokables.add(invokables);
             return this;
         }
 
@@ -290,13 +413,20 @@ public final class Engine implements AutoCloseable {
             if (mapper == null) {
                 mapper = DEFAULT_OBJECT_MAPPER;
             }
-            if (builtins == null) {
-                builtins = Builtins.builder().build();
-            }
             if (memoryFactory == null) {
                 memoryFactory = ByteArrayMemory::new;
             }
-            return new Engine(builtins, mapper, memoryFactory);
+            Map<String, Builtins> finalBuiltins = new HashMap<>();
+            // TODO: any validation to be done here?
+            for (var builtin : builtins) {
+                finalBuiltins.put(builtin.moduleName(), builtin);
+            }
+            Map<String, Invokables> finalInvokables = new HashMap<>();
+            // TODO: any validation to be done here?
+            for (var invokable : invokables) {
+                finalInvokables.put(invokable.moduleName(), invokable);
+            }
+            return new Engine(finalBuiltins, finalInvokables, mapper, memoryFactory);
         }
     }
 }

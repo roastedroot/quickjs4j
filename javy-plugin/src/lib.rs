@@ -7,14 +7,30 @@ import_namespace!("chicory_plugin");
 
 #[link(wasm_import_module = "chicory")]
 extern "C" {
-    fn invoke(proxy_ptr: u32, args_str_ptr: *const u8, args_str_len: usize) -> *const u32;
+    fn invoke(
+        module_str_ptr: *const u8,
+        module_str_len: usize,
+        name_str_ptr: *const u8,
+        name_str_len: usize,
+        args_str_ptr: *const u8,
+        args_str_len: usize,
+    ) -> *const u32;
 }
 
-fn invoke_exec(proxy_ptr: u32, args_str: String) -> String {
-    let bytes: &[u8] = args_str.as_bytes();
+fn invoke_exec(module_str: String, name_str: String, args_str: String) -> String {
+    let module_bytes: &[u8] = module_str.as_bytes();
+    let name_bytes: &[u8] = name_str.as_bytes();
+    let args_bytes: &[u8] = args_str.as_bytes();
 
     let return_str = unsafe {
-        let wide_ptr = invoke(proxy_ptr, bytes.as_ptr(), bytes.len());
+        let wide_ptr = invoke(
+            module_bytes.as_ptr(),
+            module_bytes.len(),
+            name_bytes.as_ptr(),
+            name_bytes.len(),
+            args_bytes.as_ptr(),
+            args_bytes.len(),
+        );
         let [ptr, len] = std::slice::from_raw_parts(wide_ptr, 2) else {
             unreachable!()
         };
@@ -39,7 +55,9 @@ pub extern "C" fn initialize_runtime() {
             ctx.globals()
                 .set(
                     "java_invoke",
-                    Func::from(|idx: u32, args: String| invoke_exec(idx, args)),
+                    Func::from(|module: String, name: String, args: String| {
+                        invoke_exec(module, name, args)
+                    }),
                 )
                 .unwrap();
         });

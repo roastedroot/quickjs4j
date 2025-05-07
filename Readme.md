@@ -42,7 +42,7 @@ import io.roastedroot.quickjs4j.core.Builtins;
 import io.roastedroot.quickjs4j.core.Engine;
 import io.roastedroot.quickjs4j.core.Runner;
 import io.roastedroot.quickjs4j.annotations.HostFunction;
-import io.roastedroot.quickjs4j.annotations.JsModule;
+import io.roastedroot.quickjs4j.annotations.Builtins;
 
 @JsModule()
 class MyJsTestModule implements AutoCloseable {

@@ -3,28 +3,30 @@ package chicory.test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.roastedroot.quickjs4j.annotations.Builtins;
+import io.roastedroot.quickjs4j.annotations.GuestFunction;
 import io.roastedroot.quickjs4j.annotations.HostFunction;
 import io.roastedroot.quickjs4j.annotations.HostRefParam;
-import io.roastedroot.quickjs4j.annotations.JsModule;
+import io.roastedroot.quickjs4j.annotations.Invokables;
 import io.roastedroot.quickjs4j.annotations.ReturnsHostRef;
-import io.roastedroot.quickjs4j.core.Builtins;
 import io.roastedroot.quickjs4j.core.Engine;
 import io.roastedroot.quickjs4j.core.Runner;
 import org.junit.jupiter.api.Test;
 
 class HelloJsTest {
 
-    @JsModule()
-    class JsTestModule {
-        private boolean invoked;
-        private boolean refInvoked;
-        private final Runner runner;
+    @Invokables
+    interface JsApi {
+        @GuestFunction("my_js_func")
+        int sub(int x, int y);
+    }
 
-        JsTestModule() {
-            var builtins = Builtins.builder().add(JsTestModule_Builtins.toBuiltins(this)).build();
-            var engine = Engine.builder().withBuiltins(builtins).build();
-            this.runner = Runner.builder().withEngine(engine).build();
-        }
+    private String JS_LIBRARY_CODE = "function my_js_func(x, y) { return x - y; }";
+
+    @Builtins("from_java")
+    class JavaApi {
+        public boolean invoked;
+        public boolean refInvoked;
 
         @HostFunction("my_java_func")
         public String add(int x, int y) {
@@ -49,41 +51,77 @@ class HelloJsTest {
             refInvoked = true;
             assertEquals("a pure java string", value);
         }
+    }
+
+    class JsTest {
+        // the Java API
+        private final JavaApi javaApi;
+        // Sandbox
+        private final Runner runner;
+        // the JS API
+        private final JsApi jsApi;
+
+        JsTest() {
+            this.javaApi = new JavaApi();
+            var engine =
+                    Engine.builder()
+                            .addBuiltins(JavaApi_Builtins.toBuiltins(this.javaApi))
+                            .addInvokables(JsApi_Invokables.toInvokables())
+                            .build();
+            this.runner = Runner.builder().withEngine(engine).build();
+            this.jsApi = JsApi_Invokables.create(JS_LIBRARY_CODE, runner);
+        }
 
         public void exec(String code) {
             runner.compileAndExec(code);
         }
 
         public boolean isInvoked() {
-            return invoked;
+            return javaApi.invoked;
         }
 
         public boolean isRefInvoked() {
-            return refInvoked;
+            return javaApi.refInvoked;
+        }
+
+        public int sub(int x, int y) {
+            return jsApi.sub(x, y);
         }
     }
 
     @Test
     public void helloJsModule() {
         // Arrange
-        var helloJsModule = new JsTestModule();
+        var helloJs = new JsTest();
 
         // Act
-        helloJsModule.exec("my_java_check(my_java_func(40, 2));");
+        helloJs.exec("from_java.my_java_check(from_java.my_java_func(40, 2));");
 
         // Assert
-        assertTrue(helloJsModule.isInvoked());
+        assertTrue(helloJs.isInvoked());
     }
 
     @Test
     public void useJavaRefs() {
         // Arrange
-        var helloJsModule = new JsTestModule();
+        var helloJs = new JsTest();
 
         // Act
-        helloJsModule.exec("my_java_ref_check(my_java_ref());");
+        helloJs.exec("from_java.my_java_ref_check(from_java.my_java_ref());");
 
         // assert
-        assertTrue(helloJsModule.isRefInvoked());
+        assertTrue(helloJs.isRefInvoked());
+    }
+
+    @Test
+    public void useInvokables() {
+        // Arrange
+        var helloJs = new JsTest();
+
+        // Act
+        var result = helloJs.sub(5, 2);
+
+        // assert
+        assertEquals(3, result);
     }
 }

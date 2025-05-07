@@ -4063,6 +4063,6 @@
   var mySchema = z.string();
   var parsedTuna = mySchema.safeParse("tuna");
   var parsedNumber = mySchema.safeParse(12);
-  java_check_tuna(parsedTuna);
-  java_check_number(parsedNumber);
+  from_java.java_check_tuna(parsedTuna);
+  from_java.java_check_number(parsedNumber);
 })();

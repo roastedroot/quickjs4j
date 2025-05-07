@@ -9,5 +9,12 @@ Things TODO:
 - make it possible to cache compiled JavaScript - DONE
 - write an executor that can cache already compiled scripts - DONE
 - wrap things up with an annotation processor - DONE
-- rename everything
+- improve JavaScript invocation from Java - On GOING
+- verify complex types with the GuestFunction interface
+- cleanup Invokable implementation
+- finish annotation processor generation for GuestFunction - update docs!
+- verify HostRefs in GuestFunctions
+- emit the "java_api.mjs" stub to be used in JS
+
 - more tests for primitive types in annotation processor
+- test more closer to reality (e.g. with Apicurio like interface)
