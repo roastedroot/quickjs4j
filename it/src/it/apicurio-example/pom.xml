@@ -2,54 +2,37 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <parent>
-    <groupId>io.roastedroot</groupId>
-    <artifactId>quickjs4j-parent</artifactId>
-    <version>999-SNAPSHOT</version>
-    <relativePath>../pom.xml</relativePath>
-  </parent>
+  <groupId>io.roastedroot</groupId>
+  <artifactId>apicurio-example-it</artifactId>
+  <version>0.0-SNAPSHOT</version>
+  <packaging>jar</packaging>
 
-  <artifactId>e2e-example</artifactId>
-  <version>999-SNAPSHOT</version>
-  <name>QuickJs4J - E2E Example</name>
+  <properties>
+    <maven.compiler.release>@maven.compiler.release@</maven.compiler.release>
+  </properties>
 
   <dependencies>
     <dependency>
       <groupId>io.roastedroot</groupId>
       <artifactId>quickjs4j</artifactId>
-      <version>${project.version}</version>
+      <version>@project.version@</version>
     </dependency>
     <dependency>
       <groupId>io.roastedroot</groupId>
       <artifactId>quickjs4j-annotations</artifactId>
-      <version>${project.version}</version>
+      <version>@project.version@</version>
     </dependency>
 
-    <!-- Dummy dependency to force the order -->
-    <dependency>
-      <groupId>io.roastedroot</groupId>
-      <artifactId>quickjs4j-processor</artifactId>
-      <version>${project.version}</version>
-      <scope>compile</scope>
-    </dependency>
-
-    <!-- ============= Testing ============= -->
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-api</artifactId>
-      <version>${junit.version}</version>
+      <version>@junit.version@</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-engine</artifactId>
-      <version>${junit.version}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter-params</artifactId>
-      <version>${junit.version}</version>
+      <version>@junit.version@</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -59,12 +42,14 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
+        <version>@maven-compiler-plugin.version@</version>
         <configuration>
+          <release>${maven.compiler.release}</release>
           <annotationProcessorPaths>
             <path>
               <groupId>io.roastedroot</groupId>
               <artifactId>quickjs4j-processor</artifactId>
-              <version>${project.version}</version>
+              <version>@project.version@</version>
             </path>
           </annotationProcessorPaths>
         </configuration>
