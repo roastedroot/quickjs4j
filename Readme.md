@@ -41,14 +41,13 @@ QuickJs4J runs JavaScript in a secure, sandboxed environment, requiring explicit
 It simplifies this by letting you bind top-level Java functions, making them easily callable from JavaScript.
 
 ```java
-import io.roastedroot.quickjs4j.core.Builtins;
 import io.roastedroot.quickjs4j.core.Engine;
 import io.roastedroot.quickjs4j.core.Runner;
 import io.roastedroot.quickjs4j.annotations.HostFunction;
 import io.roastedroot.quickjs4j.annotations.Builtins;
 
 @Builtins("from_java")
-class TestBuiltins {
+class JavaApi {
     @HostFunction("my_java_func")
     public String add(int x, int y) {
         var sum = x + y;
@@ -68,6 +67,34 @@ var engine =
 
 try (var runner = Runner.builder().withEngine(engine).build()) {
     runner.exec("from_java.my_java_check(from_java.my_java_func(40, 2));");
+}
+```
+
+When you need to, instead, invoke functions on a provided JavaScript/TypeScript library you can define the interface in this way:
+
+```java
+import io.roastedroot.quickjs4j.core.Engine;
+import io.roastedroot.quickjs4j.core.Runner;
+import io.roastedroot.quickjs4j.annotations.GuestFunction;
+import io.roastedroot.quickjs4j.annotations.Invokables;
+
+@Invokables("from_js")
+interface JsApi {
+    @GuestFunction
+    public String sub(int x, int y);
+}
+
+var engine =
+    Engine.builder()
+            .addInvokables(JsApi_Invokables.toInvokables())
+            .build();
+
+// inlined for demo purposes, this is usually loaded from packager distribution file
+String jsLibrary = "function sub(x, y) { return \"hello js \" + (x - y); };";
+
+try (var runner = Runner.builder().withEngine(engine).build()) {
+    var jsApi = JsApi_Invokables.create(jsLibrary, runner);
+    System.out.println(jsApi.sub(3, 1));
 }
 ```
 
@@ -122,6 +149,15 @@ try (var myTestModule = new MyJsTestModule()) {
     myTestModule.exec("my_java_ref_check(my_java_ref());");
 }
 ```
+
+## Building a JS/TS library
+
+To build your JS/TS library we invite you to take a look at [this example](it/src/it/apicurio-example/src/main/resources/library).
+The key aspects of it are:
+
+- output an "ECMAScript module", with `esbuild` specify: `--format=esm`
+- the library should implements the expected functions and `export` them
+- the annotation processor for `Builtins` is going to generate a `.mjs` file(`target/classes/META-INF/quickjs4j/builtin_name.mjs`) that represents your Java API
 
 ## Build
 
