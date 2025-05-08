@@ -24,15 +24,18 @@ Import QuickJs4J as a standard dependency:
 </dependency>
 ```
 
-and get started with an "hello world" program:
+and get started with a "hello world" program:
 
 ```java
 import io.roastedroot.quickjs4j.core.Runner;
 
 try (var runner = Runner.builder().build()) {
     runner.compileAndExec("console.log(\"Hello QuickJs4J!\");");
+    System.out.println(runner.stdout());
 }
 ```
+
+Note that you need to explicitly print to `System.out` your program's stdout output.
 
 QuickJs4J runs JavaScript in a secure, sandboxed environment, requiring explicit access to resources.
 It simplifies this by letting you bind top-level Java functions, making them easily callable from JavaScript.
@@ -44,16 +47,8 @@ import io.roastedroot.quickjs4j.core.Runner;
 import io.roastedroot.quickjs4j.annotations.HostFunction;
 import io.roastedroot.quickjs4j.annotations.Builtins;
 
-@JsModule()
-class MyJsTestModule implements AutoCloseable {
-    private final Runner runner;
-
-    public MyJsTestModule() {
-        var builtins = Builtins.builder().add(MyJsTestModule_Builtins.toBuiltins(this)).build();
-        var engine = Engine.builder().withBuiltins(builtins).build();
-        this.runner = Runner.builder().withEngine(engine).build();
-    }
-
+@Builtins("from_java")
+class TestBuiltins {
     @HostFunction("my_java_func")
     public String add(int x, int y) {
         var sum = x + y;
@@ -64,20 +59,15 @@ class MyJsTestModule implements AutoCloseable {
     public void check(String value) {
         assert("hello 42".equals(value));
     }
-
-    public void exec(String code) {
-        runner.compileAndExec(code);
-    }
-
-    @Override
-    public void close() {
-        runner.close();
-    }
 }
 
+var engine =
+    Engine.builder()
+            .addBuiltins(JavaApi_Builtins.toBuiltins(new TestBuiltins()))
+            .build();
 
-try (var myTestModule = new MyJsTestModule()) {
-    myTestModule.exec("my_java_check(my_java_func(40, 2));");
+try (var runner = Runner.builder().withEngine(engine).build()) {
+    runner.exec("from_java.my_java_check(from_java.my_java_func(40, 2));");
 }
 ```
 

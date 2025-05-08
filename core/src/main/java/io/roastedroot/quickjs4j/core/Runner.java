@@ -69,6 +69,14 @@ public final class Runner implements AutoCloseable {
         return engine.invokeGuestFunction(moduleName, name, args, libraryCode);
     }
 
+    public String stdout() {
+        return this.engine.stdout();
+    }
+
+    public String stderr() {
+        return this.engine.stderr();
+    }
+
     @Override
     public void close() {
         if (es != null) {

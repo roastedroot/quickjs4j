@@ -224,6 +224,7 @@ public class RunnerTest {
     public void minimalDocsExample() {
         try (var runner = Runner.builder().build()) {
             runner.compileAndExec("console.log(\"Hello QuickJs4J!\");");
+            System.out.println(runner.stdout());
         }
     }
 
