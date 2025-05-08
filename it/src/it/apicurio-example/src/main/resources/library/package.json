@@ -2,10 +2,12 @@
     "scripts": {
         "build": "esbuild index.js --bundle --outfile=dist/out.js --format=esm",
         "clean-resources": "rimraf node_modules",
-        "clean": "rimraf dist node_modules"
+        "clean": "rimraf dist node_modules",
+        "test": "vitest"
     },
     "devDependencies": {
         "esbuild": "0.25.2",
-        "rimraf": "^6.0.1"
+        "rimraf": "^6.0.1",
+        "vitest": "^3.1.3"
     }
 }

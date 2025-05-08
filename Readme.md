@@ -1,21 +1,21 @@
 # QuickJs4J
 
-QuickJs4J lets you easily and safely run JavaScript from Java using a sandbox.
+**QuickJs4J** lets you safely and easily run JavaScript from Java using a sandboxed environment.
 
-## Why
+## Why Use QuickJs4J?
 
-QuickJs4J provides a secure way to run JavaScript from Java. By executing code in a sandboxed environment, it ensures:
+QuickJs4J provides a secure and efficient way to execute JavaScript within Java. By running code in a sandbox, it ensures:
 
-- **Memory safety** – isolated execution protects your Java application from crashes or leaks.
-- **No system access by default** – JavaScript code can’t touch files, network, or other sensitive resources unless you explicitly allow it.
-- **Portability** - being pure Java bytecode it can run wherever the JVM can go.
-- **Native-image friendly** – works out of the box with GraalVM’s native-image for fast, lightweight deployments.
+* **Memory safety** – JavaScript runs in isolation, protecting your application from crashes or memory leaks.
+* **No system access by default** – JavaScript cannot access the filesystem, network, or other sensitive resources unless explicitly allowed.
+* **Portability** – Being pure Java bytecode, it runs wherever the JVM does.
+* **Native-image friendly** – Compatible with GraalVM's native-image for fast, lightweight deployments.
 
-Whether you're embedding scripting support or isolating untrusted code, QuickJs4J is built for safe, efficient integration.
+Whether you're embedding scripting capabilities or isolating untrusted code, QuickJs4J is designed for safe and seamless integration.
 
 ## Quick Start
 
-Import QuickJs4J as a standard dependency:
+Add QuickJs4J as a standard Maven dependency:
 
 ```xml
 <dependency>
@@ -24,93 +24,113 @@ Import QuickJs4J as a standard dependency:
 </dependency>
 ```
 
-and get started with an "hello world" program:
+Then run a simple "Hello World" example:
 
 ```java
 import io.roastedroot.quickjs4j.core.Runner;
 
 try (var runner = Runner.builder().build()) {
     runner.compileAndExec("console.log(\"Hello QuickJs4J!\");");
+    System.out.println(runner.stdout());
 }
 ```
 
-QuickJs4J runs JavaScript in a secure, sandboxed environment, requiring explicit access to resources.
-It simplifies this by letting you bind top-level Java functions, making them easily callable from JavaScript.
+Note: You must explicitly print your JavaScript program’s output using `System.out`.
+
+QuickJs4J runs JavaScript in a secure, sandboxed environment. To simplify communication, it allows you to bind Java methods so they can be called directly from JavaScript.
 
 ```java
-import io.roastedroot.quickjs4j.core.Builtins;
 import io.roastedroot.quickjs4j.core.Engine;
 import io.roastedroot.quickjs4j.core.Runner;
 import io.roastedroot.quickjs4j.annotations.HostFunction;
 import io.roastedroot.quickjs4j.annotations.Builtins;
 
-@JsModule()
-class MyJsTestModule implements AutoCloseable {
-    private final Runner runner;
-
-    public MyJsTestModule() {
-        var builtins = Builtins.builder().add(MyJsTestModule_Builtins.toBuiltins(this)).build();
-        var engine = Engine.builder().withBuiltins(builtins).build();
-        this.runner = Runner.builder().withEngine(engine).build();
-    }
-
+@Builtins("from_java")
+class JavaApi {
     @HostFunction("my_java_func")
     public String add(int x, int y) {
-        var sum = x + y;
-        return "hello " + sum;
+        return "hello " + (x + y);
     }
 
     @HostFunction("my_java_check")
     public void check(String value) {
         assert("hello 42".equals(value));
     }
-
-    public void exec(String code) {
-        runner.compileAndExec(code);
-    }
-
-    @Override
-    public void close() {
-        runner.close();
-    }
 }
 
+var engine =
+    Engine.builder()
+          .addBuiltins(JavaApi_Builtins.toBuiltins(new JavaApi()))
+          .build();
 
-try (var myTestModule = new MyJsTestModule()) {
-    myTestModule.exec("my_java_check(my_java_func(40, 2));");
+try (var runner = Runner.builder().withEngine(engine).build()) {
+    runner.exec("from_java.my_java_check(from_java.my_java_func(40, 2));");
 }
 ```
 
-You need to configure the annotation processor as usual, for example in Maven `pom.xml`:
+### Calling JavaScript from Java
+
+To invoke functions defined in a JavaScript or TypeScript library, define an interface like this:
+
+```java
+import io.roastedroot.quickjs4j.core.Engine;
+import io.roastedroot.quickjs4j.core.Runner;
+import io.roastedroot.quickjs4j.annotations.GuestFunction;
+import io.roastedroot.quickjs4j.annotations.Invokables;
+
+@Invokables("from_js")
+interface JsApi {
+    @GuestFunction
+    String sub(int x, int y);
+}
+
+var engine =
+    Engine.builder()
+          .addInvokables(JsApi_Invokables.toInvokables())
+          .build();
+
+// Inlined for demo; normally loaded from a packaged distribution file
+String jsLibrary = "function sub(x, y) { return \"hello js \" + (x - y); };";
+
+try (var runner = Runner.builder().withEngine(engine).build()) {
+    var jsApi = JsApi_Invokables.create(jsLibrary, runner);
+    System.out.println(jsApi.sub(3, 1));
+}
+```
+
+### Enabling Annotation Processing
+
+Configure the annotation processor in your Maven `pom.xml`:
 
 ```xml
-  <dependencies>
-    <dependency>
-        <groupId>io.roastedroot</groupId>
-        <artifactId>quickjs4j-annotations</artifactId>
-    </dependency>
-  </dependencies>
-    ...
-  <build>
-    <plugins>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <configuration>
-          <annotationProcessorPaths>
-            <path>
-              <groupId>io.roastedroot</groupId>
-              <artifactId>quickjs4j-processor</artifactId>
-            </path>
-          </annotationProcessorPaths>
-        </configuration>
-      </plugin>
-    </plugins>
-  </build>
+<dependencies>
+  <dependency>
+    <groupId>io.roastedroot</groupId>
+    <artifactId>quickjs4j-annotations</artifactId>
+  </dependency>
+</dependencies>
+
+<build>
+  <plugins>
+    <plugin>
+      <groupId>org.apache.maven.plugins</groupId>
+      <artifactId>maven-compiler-plugin</artifactId>
+      <configuration>
+        <annotationProcessorPaths>
+          <path>
+            <groupId>io.roastedroot</groupId>
+            <artifactId>quickjs4j-processor</artifactId>
+          </path>
+        </annotationProcessorPaths>
+      </configuration>
+    </plugin>
+  </plugins>
+</build>
 ```
 
-At times is useful to pass to the JavaScript environment a reference to a Java object without actually serializing it (e.g. keeping it only in the memory of the Java Host).
-You can do it by using `HostRef`s, when using annotations it looks like the following:
+### Passing Java Object References
+
+Sometimes, you may want to pass a Java object reference to JavaScript without serializing it (i.e., keeping it only in Java memory). Use `HostRef`s as shown below:
 
 ```java
 import io.roastedroot.quickjs4j.annotations.HostRefParam;
@@ -119,7 +139,7 @@ import io.roastedroot.quickjs4j.annotations.ReturnsHostRef;
 @ReturnsHostRef
 @HostFunction("my_java_ref")
 public String myRef() {
-    return "a java String not visible in JS";
+    return "a Java string not visible in JS";
 }
 
 @HostFunction("my_java_ref_check")
@@ -127,18 +147,43 @@ public void myRefCheck(@HostRefParam String value) {
     ...
 }
 
-
 try (var myTestModule = new MyJsTestModule()) {
     myTestModule.exec("my_java_ref_check(my_java_ref());");
 }
 ```
 
-## Build
+## Building a JS/TS Library
 
-To build this project you need a Rust toolchain available, a JDK(11+) and Maven.
+To build your JavaScript/TypeScript library, refer to [this example](it/src/it/apicurio-example/src/main/resources/library).
+
+Key points:
+
+* Output an **ECMAScript module** using tools like `esbuild`:
+
+  ```bash
+  esbuild your_file.js --format=esm
+  ```
+* The library must export the expected functions.
+* The annotation processor will generate a `.mjs` file at:
+
+  ```
+  target/classes/META-INF/quickjs4j/builtin_name.mjs
+  ```
+
+  This file bridges your Java and JS code.
+
+## Building the Project
+
+To build this project, you'll need:
+
+* A Rust toolchain
+* JDK 11 or newer
+* Maven
+
+Steps:
 
 ```bash
-rustup target add wasm32-wasip1 # only once
+rustup target add wasm32-wasip1  # Only needed once
 
 cd javy-plugin
 make build
@@ -147,10 +192,10 @@ cd ..
 mvn clean install
 ```
 
-## Thanks
+## Acknowledgements
 
-This project is standing on giant's shoulders:
+This project stands on the shoulders of giants:
 
-- [QuickJS](https://bellard.org/quickjs/) a small and embeddable Javascript engine
-- [Javy](https://github.com/bytecodealliance/javy) a convenient JavaScript to Webassembly toolchain
-- [Chicory](https://chicory.dev/) a native JVM WebAssembly runtime
+* [QuickJS](https://bellard.org/quickjs/) – a small, embeddable JavaScript engine
+* [Javy](https://github.com/bytecodealliance/javy) – a toolchain for compiling JavaScript to WebAssembly
+* [Chicory](https://chicory.dev/) – a native JVM WebAssembly runtime

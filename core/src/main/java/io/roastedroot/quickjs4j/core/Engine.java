@@ -371,6 +371,26 @@ public final class Engine implements AutoCloseable {
         }
     }
 
+    public String stdout() {
+        try {
+            stdout.flush();
+        } catch (IOException ex) {
+            throw new RuntimeException("Failed to flush stdout");
+        }
+
+        return stdout.toString(UTF_8);
+    }
+
+    public String stderr() {
+        try {
+            stderr.flush();
+        } catch (IOException ex) {
+            throw new RuntimeException("Failed to flush stdout");
+        }
+
+        return stderr.toString(UTF_8);
+    }
+
     public void free(int codePtr) {
         var ptr = exports.memory().readInt(codePtr);
         var codeLength = exports.memory().readInt(codePtr + 4);
@@ -418,6 +438,22 @@ public final class Engine implements AutoCloseable {
     public void close() {
         if (wasi != null) {
             wasi.close();
+        }
+        if (stdout != null) {
+            try {
+                stdout.flush();
+                stdout.close();
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to close stdout", e);
+            }
+        }
+        if (stderr != null) {
+            try {
+                stderr.flush();
+                stderr.close();
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to close stderr", e);
+            }
         }
     }
 
