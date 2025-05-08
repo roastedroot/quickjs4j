@@ -11,7 +11,7 @@
 
   <artifactId>quickjs4j</artifactId>
   <packaging>jar</packaging>
-  <name>QuickJs4J integration leveraging Javy</name>
+  <name>QuickJs4J</name>
 
   <dependencies>
     <dependency>

@@ -8,6 +8,7 @@
   <packaging>pom</packaging>
 
   <name>quickjs4j-parent</name>
+  <description>QuickJs sandboxed for execution in Java</description>
   <url>https://github.com/roastedroot/quickjs4j/</url>
 
   <licenses>
@@ -18,6 +19,15 @@
       <comments>A business-friendly OSS license</comments>
     </license>
   </licenses>
+
+  <developers>
+    <developer>
+      <id>andreaTP</id>
+      <name>Andrea Peruffo</name>
+      <email>andrea.peruffo1982@gmail.com</email>
+      <organization>Red Hat</organization>
+    </developer>
+  </developers>
 
   <modules>
     <module>annotations</module>
@@ -212,5 +222,72 @@
       </plugins>
     </pluginManagement>
   </build>
+
+  <profiles>
+    <profile>
+      <id>release</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>3.2.7</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+                <phase>verify</phase>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <version>3.11.2</version>
+            <configuration>
+              <sourcepath>src/main/java</sourcepath>
+              <additionalOptions>-Xdoclint:none</additionalOptions>
+              <additionalOptions>--ignore-source-errors</additionalOptions>
+              <additionalJOption>-Xdoclint:none</additionalJOption>
+            </configuration>
+            <executions>
+              <execution>
+                <id>attach-javadocs</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+            <version>3.3.1</version>
+            <executions>
+              <execution>
+                <id>attach-sources</id>
+                <goals>
+                  <goal>jar-no-fork</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>0.7.0</version>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>central</publishingServerId>
+              <autoPublish>true</autoPublish>
+              <waitUntil>published</waitUntil>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 
 </project>
