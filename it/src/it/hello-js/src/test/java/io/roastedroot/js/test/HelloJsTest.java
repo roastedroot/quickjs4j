@@ -17,11 +17,11 @@ class HelloJsTest {
 
     @Invokables
     interface JsApi {
-        @GuestFunction("my_js_func")
+        @GuestFunction
         int sub(int x, int y);
     }
 
-    private String JS_LIBRARY_CODE = "function my_js_func(x, y) { return x - y; }";
+    private String JS_LIBRARY_CODE = "function sub(x, y) { return x - y; }";
 
     @Builtins("from_java")
     class JavaApi {

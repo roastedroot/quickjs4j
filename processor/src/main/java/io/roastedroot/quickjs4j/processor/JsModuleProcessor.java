@@ -182,6 +182,9 @@ public final class JsModuleProcessor extends AbstractProcessor {
         for (Element member : elements().getAllMembers(type)) {
             if (member instanceof ExecutableElement && annotatedWith(member, GuestFunction.class)) {
                 var name = member.getAnnotation(GuestFunction.class).value();
+                if (name.isEmpty()) {
+                    name = member.getSimpleName().toString();
+                }
 
                 var executable = (ExecutableElement) member;
 
