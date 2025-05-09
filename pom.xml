@@ -11,12 +11,6 @@
   <description>QuickJs sandboxed for execution in Java</description>
   <url>https://github.com/roastedroot/quickjs4j/</url>
 
-  <scm>
-    <connection>scm:git:git://github.com/roastedroot/quickjs4j.git</connection>
-    <developerConnection>scm:git:ssh://github.com:roastedroot/quickjs4j.git</developerConnection>
-    <url>http://github.com/roastedroot/quickjs4j/tree/main</url>
-  </scm>
-
   <licenses>
     <license>
       <name>Apache-2.0</name>
@@ -41,6 +35,12 @@
     <module>it</module>
     <module>processor</module>
   </modules>
+
+  <scm>
+    <connection>scm:git:git://github.com/roastedroot/quickjs4j.git</connection>
+    <developerConnection>scm:git:ssh://github.com:roastedroot/quickjs4j.git</developerConnection>
+    <url>http://github.com/roastedroot/quickjs4j/tree/main</url>
+  </scm>
 
   <properties>
     <!-- build settings -->
