@@ -1,1 +1,3 @@
-io.roastedroot.quickjs4j.processor.JsModuleProcessor
+io.roastedroot.quickjs4j.processor.ScriptInterfaceProcessor
+io.roastedroot.quickjs4j.processor.BuiltinsProcessor
+io.roastedroot.quickjs4j.processor.InvokablesProcessor

@@ -1,0 +1,16 @@
+{
+  "name": "calculator-ts",
+  "private": false,
+  "version": "1.0.0",
+  "type": "module",
+  "devDependencies": {
+    "cp": "0.2.0",
+    "esbuild": "^0.25.4",
+    "rimraf": "6.0.1",
+    "typescript": "5.8.3"
+  },
+  "scripts": {
+    "clean": "rimraf dist",
+    "build": "tsc --p ./tsconfig-build.json && esbuild dist/Calculator.js --bundle --outfile=dist/out.js --format=esm"
+  }
+}
