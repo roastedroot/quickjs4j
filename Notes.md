@@ -11,11 +11,15 @@ Things TODO:
 - wrap things up with an annotation processor - DONE
 - improve JavaScript invocation from Java - DONE
 - verify complex types with the GuestFunction interface - DONE
-- finish annotation processor generation for GuestFunction - update docs!
+- finish annotation processor generation for GuestFunction
 - verify HostRefs in GuestFunctions - DONE
 - GuestFunctions/HostFunctions default name
 - @Invokables(allMethods = true) / @Builtins
-- emit the "java_api.mjs" stub to be used in JS - DONE - need docs!
+- emit the "java_api.mjs" stub to be used in JS - DONE
+- test more closer to reality (e.g. with Apicurio like interface) - DONE
+- add an higher level ScriptInterface that masks all the internals for most common use cases
+    - removing the `script` parameter from the Annotation: we can generate only the producer, loading static files in Annotation Processors is wired / Occam
+- test throwing the checked exception - DONE - experience is not ideal with checked exceptions, but works
+- usage of the API is a bit on the wide side, e.g. is possible to do a lot of unsupported things, build more guardrails
 
 - more tests for primitive types in annotation processor
-- test more closer to reality (e.g. with Apicurio like interface)

@@ -152,6 +152,35 @@ try (var myTestModule = new MyJsTestModule()) {
 }
 ```
 
+## High Level API
+
+An higher level API is exposed for convenience to wrap everything up for the most common use cases.
+You can use the `ScriptInterface` annotation:
+
+```java
+import io.roastedroot.quickjs4j.annotations.ScriptInterface;
+
+public class CalculatorContext {
+    public void log(String message) {
+        System.out.println("LOG>> " + message);
+    }
+}
+
+@ScriptInterface(context = CalculatorContext.class)
+public interface Calculator {
+    int add(int term1, int term2);
+
+    int subtract(int term1, int term2);
+}
+
+try (var calculator = new Calculator_Proxy(jsLibrary, new CalculatorContext()) {
+    calculator.add(1, 2);
+    calculator.subtract(3, 1);
+}
+```
+
+> ***_NOTE:_*** currently only basic use is supported.
+
 ## Building a JS/TS Library
 
 To build your JavaScript/TypeScript library, refer to [this example](it/src/it/apicurio-example/src/main/resources/library).
