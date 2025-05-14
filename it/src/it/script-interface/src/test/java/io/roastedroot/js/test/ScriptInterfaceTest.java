@@ -1,6 +1,7 @@
 package chicory.test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.roastedroot.quickjs4j.annotations.ScriptInterface;
 import java.nio.charset.StandardCharsets;
@@ -18,7 +19,15 @@ class ScriptInterfaceTest {
         }
     }
 
+    private static <E extends Throwable> void sneakyThrow(Throwable e) throws E {
+        throw (E) e;
+    }
+
     public class CalculatorContext {
+        public void throwDivideByZero() {
+            sneakyThrow(new DivideByZeroException("division by zero"));
+        }
+
         public void log(String message) {
             System.out.println("LOG>> " + message);
         }
@@ -57,5 +66,22 @@ class ScriptInterfaceTest {
         assertEquals(2, subtract);
         assertEquals(6, multiply);
         assertEquals(3, divide);
+
+        calculatorProxy.close();
+    }
+
+    @Test
+    public void scriptInterfaceUsageWithExceptions() throws Exception {
+        var jsLibrary =
+                new String(
+                        ScriptInterfaceTest.class
+                                .getResourceAsStream("/ts/dist/out.js")
+                                .readAllBytes(),
+                        StandardCharsets.UTF_8);
+        var calculatorProxy = new Calculator_Proxy(jsLibrary, new CalculatorContext());
+
+        assertThrows(DivideByZeroException.class, () -> calculatorProxy.divide(6, 0));
+
+        calculatorProxy.close();
     }
 }

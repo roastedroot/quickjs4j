@@ -175,6 +175,13 @@ public class ScriptInterfaceProcessor extends Quickjs4jAbstractProcessor {
                 }
                 method.setType(parseType(((ExecutableElement) member).getReturnType().toString()));
 
+                List<? extends TypeMirror> thrownTypes =
+                        ((ExecutableElement) member).getThrownTypes();
+                if (thrownTypes != null && thrownTypes.size() > 0) {
+                    log(ERROR, "Checked exceptions are not supported in Builtins", type);
+                    throw new AbortProcessingException();
+                }
+
                 if (extractHasReturn((ExecutableElement) member)) {
                     method.setBody(new BlockStmt().addStatement(new ReturnStmt(invokeHandle)));
                 } else {

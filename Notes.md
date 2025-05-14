@@ -19,6 +19,7 @@ Things TODO:
 - test more closer to reality (e.g. with Apicurio like interface) - DONE
 - add an higher level ScriptInterface that masks all the internals for most common use cases
     - removing the `script` parameter from the Annotation: we can generate only the producer, loading static files in Annotation Processors is wired / Occam
-- test throwing the checked exception
+- test throwing the checked exception - DONE - experience is not ideal with checked exceptions, but works
+- usage of the API is a bit on the wide side, e.g. is possible to do a lot of unsupported things, build more guardrails
 
 - more tests for primitive types in annotation processor

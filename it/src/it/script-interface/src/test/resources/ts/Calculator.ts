@@ -1,4 +1,4 @@
-import { log } from "./Calculator_Builtins.mjs";
+import { log, throwDivideByZero } from "./Calculator_Builtins.mjs";
 
 export function add(term1: number, term2: number): number {
     log("Adding " + term1 + " to " + term2);
@@ -17,5 +17,8 @@ export function multiply(factor1: number, factor2: number): number {
 
 export function divide(dividend: number, divisor: number): number {
     log("Dividing " + dividend + " by " + divisor);
+    if (divisor === 0) {
+        throwDivideByZero();
+    }
     return dividend / divisor;
 }

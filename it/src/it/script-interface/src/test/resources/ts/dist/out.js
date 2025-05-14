@@ -1,4 +1,7 @@
 // dist/Calculator_Builtins.mjs
+function throwDivideByZero() {
+  Calculator_Builtins.throwDivideByZero();
+}
 function log(args0) {
   Calculator_Builtins.log(args0);
 }
@@ -18,6 +21,9 @@ function multiply(factor1, factor2) {
 }
 function divide(dividend, divisor) {
   log("Dividing " + dividend + " by " + divisor);
+  if (divisor === 0) {
+    throwDivideByZero();
+  }
   return dividend / divisor;
 }
 export {
