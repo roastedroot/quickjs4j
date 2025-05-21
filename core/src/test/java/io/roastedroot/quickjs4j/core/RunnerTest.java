@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
@@ -278,5 +279,13 @@ public class RunnerTest {
         assertTrue(exception.getMessage().contains("Failed to compile JS code"));
 
         engine.close();
+    }
+
+    @Test
+    public void withExecutorService() {
+        try (var runner =
+                Runner.builder().withExecutorService(Executors.newCachedThreadPool()).build()) {
+            runner.compileAndExec("console.log('something something');");
+        }
     }
 }
