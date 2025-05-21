@@ -117,8 +117,7 @@ public class ScriptInterfaceProcessor extends Quickjs4jAbstractProcessor {
 
     private void generateBuiltins(TypeElement type) {
         var builtinsContext = getContextClassFromAnnotation(getScriptInterfaceAnnotation(type));
-        // TODO: test this condition
-        if (builtinsContext.getSimpleName().toString().equals("Void")) {
+        if (!hasBuiltinsContext(builtinsContext)) {
             return;
         }
 
@@ -228,26 +227,33 @@ public class ScriptInterfaceProcessor extends Quickjs4jAbstractProcessor {
 
         var constructor = clazz.addConstructor(Modifier.Keyword.PUBLIC);
         constructor.addParameter("String", "script");
-        constructor.addParameter(builtinsContext.asType().toString(), "ctx");
-        var constructorBody = new BlockStmt();
-        var engineBuilder =
+
+        Expression engineBuilder = new MethodCallExpr(new NameExpr("Engine"), "builder");
+        if (hasBuiltinsContext(builtinsContext)) {
+            // add builtins
+            constructor.addParameter(builtinsContext.asType().toString(), "ctx");
+
+            engineBuilder =
+                    new MethodCallExpr(
+                            engineBuilder,
+                            "addBuiltins",
+                            NodeList.nodeList(
+                                    new MethodCallExpr(
+                                            new NameExpr(name + "_Builtins_Builtins"),
+                                            "toBuiltins",
+                                            NodeList.nodeList(
+                                                    new ObjectCreationExpr(
+                                                            null,
+                                                            parseClassOrInterfaceType(
+                                                                    name + "_Builtins"),
+                                                            NodeList.nodeList(
+                                                                    new NameExpr("ctx")))))));
+        }
+
+        engineBuilder =
                 new MethodCallExpr(
                         new MethodCallExpr(
-                                new MethodCallExpr(
-                                        new MethodCallExpr(new NameExpr("Engine"), "builder"),
-                                        "addBuiltins",
-                                        NodeList.nodeList(
-                                                new MethodCallExpr(
-                                                        new NameExpr(name + "_Builtins_Builtins"),
-                                                        "toBuiltins",
-                                                        NodeList.nodeList(
-                                                                new ObjectCreationExpr(
-                                                                        null,
-                                                                        parseClassOrInterfaceType(
-                                                                                name + "_Builtins"),
-                                                                        NodeList.nodeList(
-                                                                                new NameExpr(
-                                                                                        "ctx"))))))),
+                                engineBuilder,
                                 "addInvokables",
                                 NodeList.nodeList(
                                         new MethodCallExpr(
@@ -255,6 +261,7 @@ public class ScriptInterfaceProcessor extends Quickjs4jAbstractProcessor {
                                                 "toInvokables"))),
                         "build");
 
+        var constructorBody = new BlockStmt();
         constructorBody.addStatement(
                 new AssignExpr(
                         new VariableDeclarationExpr(parseType("Engine"), "engine"),
@@ -328,6 +335,10 @@ public class ScriptInterfaceProcessor extends Quickjs4jAbstractProcessor {
         } catch (IOException e) {
             log(ERROR, format("Failed to create %s file: %s", qualifiedName, e), null);
         }
+    }
+
+    private static boolean hasBuiltinsContext(Element elem) {
+        return elem != null && !elem.getSimpleName().toString().equals("Void");
     }
 
     // TODO: ask Eric if the following 2 are standard/safe/known
