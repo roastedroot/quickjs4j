@@ -11,12 +11,11 @@ import java.util.concurrent.TimeoutException;
 public final class Runner implements AutoCloseable {
     private final int timeoutMs;
     private final Engine engine;
-
     private final ExecutorService es;
 
-    private Runner(Engine engine, int timeout) {
+    private Runner(Engine engine, int timeout, ExecutorService es) {
         this.engine = engine;
-        this.es = Executors.newSingleThreadExecutor();
+        this.es = es;
         this.timeoutMs = timeout;
     }
 
@@ -94,6 +93,12 @@ public final class Runner implements AutoCloseable {
     public static class Builder {
         private Engine engine;
         private int timeout = -1;
+        private ExecutorService es;
+
+        public Builder withExecutorService(ExecutorService es) {
+            this.es = es;
+            return this;
+        }
 
         public Builder withEngine(Engine engine) {
             this.engine = engine;
@@ -109,7 +114,10 @@ public final class Runner implements AutoCloseable {
             if (this.engine == null) {
                 this.engine = Engine.builder().build();
             }
-            return new Runner(this.engine, this.timeout);
+            if (this.es == null) {
+                this.es = Executors.newSingleThreadExecutor();
+            }
+            return new Runner(this.engine, this.timeout, this.es);
         }
     }
 }
