@@ -53,7 +53,7 @@ class ScriptInterfaceTest {
                                 .getResourceAsStream("/ts/dist/out.js")
                                 .readAllBytes(),
                         StandardCharsets.UTF_8);
-        var calculatorProxy = new Calculator_Proxy(jsLibrary, new CalculatorContext());
+        var calculatorProxy = Calculator_Factory.create(jsLibrary, new CalculatorContext());
 
         // Act
         var add = calculatorProxy.add(1, 2);
