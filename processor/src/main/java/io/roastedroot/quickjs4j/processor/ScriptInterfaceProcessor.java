@@ -60,6 +60,63 @@ public class ScriptInterfaceProcessor extends Quickjs4jAbstractProcessor {
         generateBuiltins(type);
         generateInvokables(type);
         generateProxy(type);
+        generateFactory(type);
+    }
+
+    private void generateFactory(TypeElement type) {
+        var name = type.getSimpleName().toString();
+
+        var pkg = getPackageName(type);
+        var packageName = pkg.getQualifiedName().toString();
+        var cu = (pkg.isUnnamed()) ? new CompilationUnit() : new CompilationUnit(packageName);
+        if (!pkg.isUnnamed()) {
+            cu.setPackageDeclaration(packageName);
+            cu.addImport(type.getQualifiedName().toString());
+        }
+
+        cu.addImport("io.roastedroot.quickjs4j.core.ScriptInterfaceFactory");
+
+        String ctxName;
+        var builtinsContext = getContextClassFromAnnotation(getScriptInterfaceAnnotation(type));
+        if (!hasBuiltinsContext(builtinsContext)) {
+            ctxName = "Void";
+        } else {
+            ctxName = builtinsContext.asType().toString();
+        }
+
+        var clazz =
+                cu.addClass(name + "_Factory")
+                        .addImplementedType(
+                                parseClassOrInterfaceType(
+                                        "ScriptInterfaceFactory<" + name + ", " + ctxName + ">"))
+                        .addSingleMemberAnnotation(Generated.class, processorName);
+
+        clazz.addConstructor(Modifier.Keyword.PRIVATE);
+
+        var createMethod =
+                clazz.addMethod("create", Modifier.Keyword.PUBLIC)
+                        .addParameter(String.class, "scriptLibrary")
+                        .addParameter(ctxName, "context")
+                        .setType(name);
+
+        createMethod
+                .createBody()
+                .addStatement(
+                        new ReturnStmt(
+                                new ObjectCreationExpr(
+                                        null,
+                                        parseClassOrInterfaceType(name + "_Proxy"),
+                                        NodeList.nodeList(
+                                                new NameExpr("scriptLibrary"),
+                                                new NameExpr("context")))));
+
+        String prefix = (pkg.isUnnamed()) ? "" : packageName + ".";
+        String qualifiedName = prefix + type.getSimpleName() + "_Factory";
+        try (Writer writer = filer().createSourceFile(qualifiedName, type).openWriter()) {
+            writer.write(cu.printer(printer()).toString());
+        } catch (IOException e) {
+            log(ERROR, format("Failed to create %s file: %s", qualifiedName, e), null);
+        }
     }
 
     private void generateInvokables(TypeElement type) {
