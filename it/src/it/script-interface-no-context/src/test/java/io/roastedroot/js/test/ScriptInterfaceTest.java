@@ -10,16 +10,25 @@ class ScriptInterfaceTest {
     @ScriptInterface()
     public interface UserFunction {
         int operation(int term1, int term2);
+
+        void log(String message);
+    }
+
+    String jsLibrary(String operation) {
+        return "function operation(term1, term2) { return (term1 "
+                + operation
+                + " term2); }\n"
+                + "function log(msg) { console.log(msg); }";
     }
 
     @Test
     public void scriptInterfaceUsage() throws Exception {
         // Arrange
-        var jsLibrary = "function operation(term1, term2) { return (term1 * term2); }";
-        var userFunctionProxy = new UserFunction_Proxy(jsLibrary);
+        var userFunctionProxy = new UserFunction_Proxy(jsLibrary("*"));
 
         // Act
         var result = userFunctionProxy.operation(3, 2);
+        userFunctionProxy.log("result is " + result);
 
         // Assert
         assertEquals(6, result);
@@ -30,8 +39,7 @@ class ScriptInterfaceTest {
     @Test
     public void scriptInterfaceUsage2() throws Exception {
         // Arrange
-        var jsLibrary = "function operation(term1, term2) { return (term1 + term2); }";
-        var userFunctionProxy = new UserFunction_Proxy(jsLibrary);
+        var userFunctionProxy = new UserFunction_Proxy(jsLibrary("+"));
 
         // Act
         var result = userFunctionProxy.operation(3, 2);

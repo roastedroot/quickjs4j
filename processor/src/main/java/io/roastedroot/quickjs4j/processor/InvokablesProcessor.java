@@ -18,7 +18,6 @@ import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
-import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
@@ -153,7 +152,6 @@ public final class InvokablesProcessor extends Quickjs4jAbstractProcessor {
                             new ReturnStmt(new CastExpr(returnType, invocationHandle)));
                 } else {
                     methodBody.addStatement(invocationHandle);
-                    methodBody.addStatement(new ReturnStmt(new NullLiteralExpr()));
                 }
 
                 functions.add(processGuestFunction((ExecutableElement) member));
