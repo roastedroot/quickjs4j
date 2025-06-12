@@ -16,11 +16,9 @@ import com.dylibso.chicory.wasm.types.ValueType;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -106,8 +104,6 @@ public final class Engine implements AutoCloseable {
                             + paramsStr
                             + "));";
 
-            System.out.println(jsCode);
-
             codePtr = compileRaw(jsCode.getBytes(UTF_8));
             exec(codePtr);
         } finally {
@@ -120,41 +116,43 @@ public final class Engine implements AutoCloseable {
     }
 
     // Plan:
-    // we compile a static version of the module and we invoke it parametrically using a basic protocol
+    // we compile a static version of the module and we invoke it parametrically using a basic
+    // protocol
     // { moduleName: "..", functionName: "..", args: "stringified args" }
     private String jsReadStdIn() {
-        return "function readInput() {\n" +
-                " console.log('waiting for input');\n" +
-                "    const chunkSize = 1024;\n" +
-                "    const inputChunks = [];\n" +
-                "    let totalBytes = 0;\n" +
-                "\n" +
-                "    // Read all the available bytes\n" +
-                "    while (1) {\n" +
-                "        const buffer = new Uint8Array(chunkSize);\n" +
-                "        // Stdin file descriptor\n" +
-                "        const fd = 0;\n" +
-                "        const bytesRead = Javy.IO.readSync(fd, buffer);\n" +
-                "\n" +
-                "        totalBytes += bytesRead;\n" +
-                "        if (bytesRead === 0) {\n" +
-                "            break;\n" +
-                "        }\n" +
-                "        inputChunks.push(buffer.subarray(0, bytesRead));\n" +
-                "    }\n" +
-                "\n" +
-                "    // Assemble input into a single Uint8Array\n" +
-                "    const { finalBuffer } = inputChunks.reduce((context, chunk) => {\n" +
-                "        context.finalBuffer.set(chunk, context.bufferOffset);\n" +
-                "        context.bufferOffset += chunk.length;\n" +
-                "        return context;\n" +
-                "    }, { bufferOffset: 0, finalBuffer: new Uint8Array(totalBytes) });\n" +
-                "\n" +
-                "    return JSON.parse(new TextDecoder().decode(finalBuffer));\n" +
-                "}";
+        return "function readInput() {\n"
+                + " console.log('waiting for input');\n"
+                + "    const chunkSize = 1024;\n"
+                + "    const inputChunks = [];\n"
+                + "    let totalBytes = 0;\n"
+                + "\n"
+                + "    // Read all the available bytes\n"
+                + "    while (1) {\n"
+                + "        const buffer = new Uint8Array(chunkSize);\n"
+                + "        // Stdin file descriptor\n"
+                + "        const fd = 0;\n"
+                + "        const bytesRead = Javy.IO.readSync(fd, buffer);\n"
+                + "\n"
+                + "        totalBytes += bytesRead;\n"
+                + "        if (bytesRead === 0) {\n"
+                + "            break;\n"
+                + "        }\n"
+                + "        inputChunks.push(buffer.subarray(0, bytesRead));\n"
+                + "    }\n"
+                + "\n"
+                + "    // Assemble input into a single Uint8Array\n"
+                + "    const { finalBuffer } = inputChunks.reduce((context, chunk) => {\n"
+                + "        context.finalBuffer.set(chunk, context.bufferOffset);\n"
+                + "        context.bufferOffset += chunk.length;\n"
+                + "        return context;\n"
+                + "    }, { bufferOffset: 0, finalBuffer: new Uint8Array(totalBytes) });\n"
+                + "\n"
+                + "    return JSON.parse(new TextDecoder().decode(finalBuffer));\n"
+                + "}";
     }
 
-    public byte[] compilePortableGuestFunction(String libraryCode, String invokableModuleName, String invokableName) {
+    public byte[] compilePortableGuestFunction(
+            String libraryCode, String invokableModuleName, String invokableName) {
         int codePtr = 0;
         try {
             String jsCode =
@@ -167,18 +165,10 @@ public final class Engine implements AutoCloseable {
                             + new String(jsSuffix(), UTF_8)
                             + "\n"
                             + "const input = readInput();\n"
-                            // TODO: improve this code embedding
-                            // TODO: generate something like a switch to the invokable functions
-                            // the alternative is to use eval ...
-                            // this works:
-                            // + "java_invoke(input.moduleName, input.functionName + \"_set_result\", \"[10]\");";
-                            // now let's refactor it
-                            // + "const result = (args) => { return globalThis[input.moduleName][input.functionName](...JSON.parse(args)); };\n"
-                            + "java_invoke(input.moduleName, input.functionName + \"_set_result\", JSON.stringify([globalThis[input.moduleName][input.functionName](...JSON.parse(input.args))]));";
-//                            JSON.stringify(" +
-//                            invokableModuleName + "." + invokableName + "(3, 4)));";
+                            + "java_invoke(input.moduleName, input.functionName + \"_set_result\","
+                            + " JSON.stringify([globalThis[input.moduleName][input.functionName](...JSON.parse(input.args))]));";
 
-            System.out.println("Compiling:\n" + jsCode);
+            // System.out.println(jsCode);
 
             codePtr = compileRaw(jsCode.getBytes(UTF_8));
             return readCompiled(codePtr);
@@ -190,37 +180,38 @@ public final class Engine implements AutoCloseable {
     }
 
     public String computeArgs(String moduleName, String name, List<Object> args) {
-            GuestFunction guestFunction = invokables.get(moduleName).byName(name);
-            if (guestFunction.paramTypes().size() != args.size()) {
-                throw new IllegalArgumentException(
-                        "Guest function should be invoked with the expected "
-                                + guestFunction.paramTypes().size()
-                                + " params, but got: "
-                                + args.size());
-            }
-            StringBuilder paramsStr = new StringBuilder();
-            try {
-                for (int i = 0; i < args.size(); i++) {
-                    if (i > 0) {
-                        paramsStr.append(", ");
-                    }
-                    var clazz = guestFunction.paramTypes().get(i);
-                    if (clazz == HostRef.class) {
-                        javaRefs.add(args.get(i));
-                        var ptr = javaRefs.size() - 1;
-                        paramsStr.append(mapper.writeValueAsString(ptr));
-                    } else {
-                        paramsStr.append(mapper.writeValueAsString(args.get(i)));
-                    }
+        GuestFunction guestFunction = invokables.get(moduleName).byName(name);
+        if (guestFunction.paramTypes().size() != args.size()) {
+            throw new IllegalArgumentException(
+                    "Guest function should be invoked with the expected "
+                            + guestFunction.paramTypes().size()
+                            + " params, but got: "
+                            + args.size());
+        }
+        StringBuilder paramsStr = new StringBuilder();
+        try {
+            for (int i = 0; i < args.size(); i++) {
+                if (i > 0) {
+                    paramsStr.append(", ");
                 }
-            } catch (JsonProcessingException e) {
-                throw new RuntimeException(e);
+                var clazz = guestFunction.paramTypes().get(i);
+                if (clazz == HostRef.class) {
+                    javaRefs.add(args.get(i));
+                    var ptr = javaRefs.size() - 1;
+                    paramsStr.append(mapper.writeValueAsString(ptr));
+                } else {
+                    paramsStr.append(mapper.writeValueAsString(args.get(i)));
+                }
             }
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
 
-            return paramsStr.toString();
+        return paramsStr.toString();
     }
 
-    public Object invokeGuestFunction(String moduleName, String name, byte[] compiledCode) {
+    public Object invokePrecompiledGuestFunction(
+            String moduleName, String name, byte[] compiledCode) {
         int codePtr = 0;
         try {
             codePtr = writeCompiled(compiledCode);
