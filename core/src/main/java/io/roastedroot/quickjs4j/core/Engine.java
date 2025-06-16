@@ -32,9 +32,9 @@ public final class Engine implements AutoCloseable {
 
     private final ByteArrayOutputStream stdout = new ByteArrayOutputStream();
     private final ByteArrayOutputStream stderr = new ByteArrayOutputStream();
-    private final WasiOptions wasiOpts =
-            WasiOptions.builder().withStdout(stdout).withStderr(stderr).build();
-    private final WasiPreview1 wasi = WasiPreview1.builder().withOptions(wasiOpts).build();
+    private final WasiOptions wasiOpts;
+
+    private final WasiPreview1 wasi;
     private final Instance instance;
     private final Engine_ModuleExports exports;
 
@@ -44,8 +44,67 @@ public final class Engine implements AutoCloseable {
 
     private final List<Object> javaRefs = new ArrayList<>();
 
+    private static final String ENGINE_MODULE_NAME = "quickjs4j_engine";
+    private static final String MODULE_NAME_FUNC = "module_name";
+    private static final String FUNCTION_NAME_FUNC = "function_name";
+    private static final String ARGS_FUNC = "args";
+
+    private String invokeModuleName;
+    private String invokeFunctionName;
+    private String invokeArgs;
+
+    private final ScriptCache cache;
+
     public static Builder builder() {
         return new Builder();
+    }
+
+    private Engine(
+            Map<String, Builtins> builtins,
+            Map<String, Invokables> invokables,
+            ObjectMapper mapper,
+            Function<MemoryLimits, Memory> memoryFactory,
+            ScriptCache cache) {
+        this.mapper = mapper;
+        this.builtins = builtins;
+        this.cache = cache;
+
+        // builtins to make invoke dynamic javascript functions
+        builtins.put(
+                ENGINE_MODULE_NAME,
+                Builtins.builder(ENGINE_MODULE_NAME)
+                        .addVoidToString(MODULE_NAME_FUNC, () -> invokeModuleName)
+                        .addVoidToString(FUNCTION_NAME_FUNC, () -> invokeFunctionName)
+                        .addVoidToString(ARGS_FUNC, () -> invokeArgs)
+                        .build());
+
+        var wasiOptsBuilder = WasiOptions.builder().withStdout(stdout).withStderr(stderr);
+
+        this.wasiOpts = wasiOptsBuilder.build();
+        this.wasi = WasiPreview1.builder().withOptions(this.wasiOpts).build();
+        // set_result builtins
+        invokables.entrySet().stream()
+                .forEach(
+                        e -> {
+                            var builder = Builtins.builder(e.getKey());
+                            e.getValue()
+                                    .functions()
+                                    .forEach(entry -> builder.add(entry.setResultHostFunction()));
+                            this.builtins.put(e.getKey(), builder.build());
+                        });
+        this.invokables = invokables;
+        instance =
+                Instance.builder(JavyPluginModule.load())
+                        .withMemoryFactory(memoryFactory)
+                        .withMachineFactory(JavyPluginModule::create)
+                        .withImportValues(
+                                ImportValues.builder()
+                                        .addFunction(wasi.toHostFunctions())
+                                        .addFunction(invokeFn)
+                                        .build())
+                        .build();
+        exports = new Engine_ModuleExports(instance);
+        exports.initializeRuntime();
     }
 
     private String readJavyString(int ptr, int len) {
@@ -55,6 +114,52 @@ public final class Engine implements AutoCloseable {
 
     public Object invokeGuestFunction(
             String moduleName, String name, List<Object> args, String libraryCode) {
+        return invokePrecompiledGuestFunction(
+                moduleName, name, args, compilePortableGuestFunction(libraryCode));
+    }
+
+    // Plan:
+    // we compile a static version of the module and we invoke it parametrically using a basic
+    // protocol
+    // { moduleName: "..", functionName: "..", args: "stringified args" }
+    public byte[] compilePortableGuestFunction(String libraryCode) {
+        int codePtr = 0;
+        try {
+            var moduleName = ENGINE_MODULE_NAME + "." + MODULE_NAME_FUNC + "()";
+            var functionName = ENGINE_MODULE_NAME + "." + FUNCTION_NAME_FUNC + "()";
+            var args = ENGINE_MODULE_NAME + "." + ARGS_FUNC + "()";
+            String jsCode =
+                    new String(jsPrelude(), UTF_8)
+                            + "\n"
+                            + libraryCode
+                            + "\n"
+                            + new String(jsSuffix(), UTF_8)
+                            + "\n"
+                            + "java_invoke("
+                            + moduleName
+                            + ", "
+                            + functionName
+                            + " + \"_set_result\","
+                            + " JSON.stringify([globalThis["
+                            + moduleName
+                            + "]["
+                            + functionName
+                            + "](...JSON.parse("
+                            + args
+                            + "))]));";
+
+            // System.out.println(jsCode);
+
+            codePtr = compileRaw(jsCode.getBytes(UTF_8));
+            return readCompiled(codePtr);
+        } finally {
+            if (codePtr != 0) {
+                free(codePtr);
+            }
+        }
+    }
+
+    private String computeArgs(String moduleName, String name, List<Object> args) {
         GuestFunction guestFunction = invokables.get(moduleName).byName(name);
         if (guestFunction.paramTypes().size() != args.size()) {
             throw new IllegalArgumentException(
@@ -82,26 +187,17 @@ public final class Engine implements AutoCloseable {
             throw new RuntimeException(e);
         }
 
+        return "[" + paramsStr + "]";
+    }
+
+    public Object invokePrecompiledGuestFunction(
+            String moduleName, String name, List<Object> args, byte[] compiledCode) {
         int codePtr = 0;
         try {
-            String jsCode =
-                    new String(jsPrelude(), UTF_8)
-                            + "\n"
-                            + libraryCode
-                            + "\n"
-                            + new String(jsSuffix(), UTF_8)
-                            + "\n"
-                            + moduleName
-                            + "."
-                            + guestFunction.setResultFunName()
-                            + "("
-                            + moduleName
-                            + "."
-                            + guestFunction.name()
-                            + "("
-                            + paramsStr
-                            + "));";
-            codePtr = compileRaw(jsCode.getBytes(UTF_8));
+            this.invokeModuleName = moduleName;
+            this.invokeFunctionName = name;
+            this.invokeArgs = computeArgs(moduleName, name, args);
+            codePtr = writeCompiled(compiledCode);
             exec(codePtr);
         } finally {
             if (codePtr != 0) {
@@ -215,38 +311,6 @@ public final class Engine implements AutoCloseable {
                     List.of(ValueType.I32),
                     this::invokeBuiltin);
 
-    private Engine(
-            Map<String, Builtins> builtins,
-            Map<String, Invokables> invokables,
-            ObjectMapper mapper,
-            Function<MemoryLimits, Memory> memoryFactory) {
-        this.mapper = mapper;
-        this.builtins = builtins;
-        // set_result builtins
-        invokables.entrySet().stream()
-                .forEach(
-                        e -> {
-                            var builder = Builtins.builder(e.getKey());
-                            e.getValue()
-                                    .functions()
-                                    .forEach(entry -> builder.add(entry.setResultHostFunction()));
-                            this.builtins.put(e.getKey(), builder.build());
-                        });
-        this.invokables = invokables;
-        instance =
-                Instance.builder(JavyPluginModule.load())
-                        .withMemoryFactory(memoryFactory)
-                        .withMachineFactory(JavyPluginModule::create)
-                        .withImportValues(
-                                ImportValues.builder()
-                                        .addFunction(wasi.toHostFunctions())
-                                        .addFunction(invokeFn)
-                                        .build())
-                        .build();
-        exports = new Engine_ModuleExports(instance);
-        exports.initializeRuntime();
-    }
-
     // This function dynamically generates the global functions defined by the Builtins
     private byte[] jsPrelude() {
         var preludeBuilder = new StringBuilder();
@@ -302,6 +366,10 @@ public final class Engine implements AutoCloseable {
     }
 
     public int compileRaw(byte[] js) {
+        if (cache.exists(js)) {
+            return writeCompiled(cache.get(js));
+        }
+
         byte[] jsCode = js;
 
         var ptr =
@@ -323,6 +391,8 @@ public final class Engine implements AutoCloseable {
 
             // TODO: debug
             // System.out.println("Final JavaScript RAW:\n" + new String(jsCode, UTF_8));
+
+            cache.set(js, readCompiled(aggregatedCodePtr));
 
             return aggregatedCodePtr; // 32 bit
         } catch (TrapException e) {
@@ -462,6 +532,7 @@ public final class Engine implements AutoCloseable {
         private List<Invokables> invokables = new ArrayList<>();
         private ObjectMapper mapper;
         private Function<MemoryLimits, Memory> memoryFactory;
+        private ScriptCache cache;
 
         private Builder() {}
 
@@ -485,6 +556,11 @@ public final class Engine implements AutoCloseable {
             return this;
         }
 
+        public Builder withCache(ScriptCache cache) {
+            this.cache = cache;
+            return this;
+        }
+
         public Engine build() {
             if (mapper == null) {
                 mapper = DEFAULT_OBJECT_MAPPER;
@@ -502,7 +578,10 @@ public final class Engine implements AutoCloseable {
             for (var invokable : invokables) {
                 finalInvokables.put(invokable.moduleName(), invokable);
             }
-            return new Engine(finalBuiltins, finalInvokables, mapper, memoryFactory);
+            if (cache == null) {
+                cache = new ScriptCache();
+            }
+            return new Engine(finalBuiltins, finalInvokables, mapper, memoryFactory, cache);
         }
     }
 }
