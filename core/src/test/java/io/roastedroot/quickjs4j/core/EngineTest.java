@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Objects;
@@ -627,6 +628,8 @@ public class EngineTest {
 
         assertTrue(result1.get("incompatibleDifferences").isArray());
         assertTrue(result2.get("incompatibleDifferences").isArray());
+        var mapper = new ObjectMapper();
+        assertEquals(mapper.writeValueAsString(result1), mapper.writeValueAsString(result2));
 
         System.out.println("Approx consumed time first run: " + (after1 - before1));
         System.out.println("Approx consumed time second run: " + (after2 - before2));
