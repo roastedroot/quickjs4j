@@ -60,7 +60,7 @@
     <maven-compiler-plugin.version>3.14.0</maven-compiler-plugin.version>
     <surefire-plugin.version>3.5.2</surefire-plugin.version>
     <failsafe-plugin.version>${surefire-plugin.version}</failsafe-plugin.version>
-    <maven-invoker-plugin.version>3.9.0</maven-invoker-plugin.version>
+    <maven-invoker-plugin.version>3.9.1</maven-invoker-plugin.version>
     <maven-failsafe-plugin.version>3.5.3</maven-failsafe-plugin.version>
 
     <!-- test time versions -->
