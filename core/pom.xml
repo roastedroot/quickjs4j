@@ -16,7 +16,7 @@
   <dependencies>
     <dependency>
       <groupId>com.dylibso.chicory</groupId>
-      <artifactId>host-module-annotations-experimental</artifactId>
+      <artifactId>annotations</artifactId>
       <version>${chicory.version}</version>
     </dependency>
     <dependency>
@@ -77,16 +77,16 @@
 
       <plugin>
         <groupId>com.dylibso.chicory</groupId>
-        <artifactId>aot-maven-plugin-experimental</artifactId>
+        <artifactId>chicory-compiler-maven-plugin</artifactId>
         <version>${chicory.version}</version>
         <executions>
           <execution>
             <id>javy-plugin</id>
             <goals>
-              <goal>wasm-aot-gen</goal>
+              <goal>compile</goal>
             </goals>
             <configuration>
-              <name>io.roastedroot.quickjs4j.core.JavyPlugin</name>
+              <name>io.roastedroot.quickjs4j.core.JavyPluginModule</name>
               <wasmFile>../javy_quickjs4j_plugin.wasm</wasmFile>
             </configuration>
           </execution>
@@ -114,7 +114,7 @@
           <annotationProcessorPaths>
             <path>
               <groupId>com.dylibso.chicory</groupId>
-              <artifactId>host-module-processor-experimental</artifactId>
+              <artifactId>annotations-processor</artifactId>
               <version>${chicory.version}</version>
             </path>
           </annotationProcessorPaths>

@@ -2,7 +2,7 @@ package io.roastedroot.quickjs4j.core;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import com.dylibso.chicory.experimental.hostmodule.annotations.WasmModuleInterface;
+import com.dylibso.chicory.annotations.WasmModuleInterface;
 import com.dylibso.chicory.runtime.ByteArrayMemory;
 import com.dylibso.chicory.runtime.HostFunction;
 import com.dylibso.chicory.runtime.ImportValues;
