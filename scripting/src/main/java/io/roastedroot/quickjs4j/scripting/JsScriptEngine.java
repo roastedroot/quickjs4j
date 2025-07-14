@@ -18,40 +18,52 @@ import javax.script.SimpleBindings;
 public class JsScriptEngine extends AbstractScriptEngine {
 
     private final Runner runner;
-
     private final Runner textEncoderRunner;
 
     public JsScriptEngine() {
-        this(
-                Engine.builder()
-                        .addInvokables(
-                                Invokables.builder("quickjs4jScripting")
-                                        .add(
-                                                new GuestFunction(
-                                                        "quickjsEval", List.of(), Object.class))
-                                        .build())
-                        .build());
+        this(null, null);
     }
 
-    public JsScriptEngine(Engine engine) {
-        this(Runner.builder().withEngine(engine).build());
+    public JsScriptEngine(Runner runner, Runner textEncoderRunner) {
+        if (runner != null) {
+            this.runner = runner;
+        } else {
+            var engine =
+                    Engine.builder()
+                            .addInvokables(
+                                    Invokables.builder("quickjs4jScripting")
+                                            .add(
+                                                    new GuestFunction(
+                                                            "quickjsEval", List.of(), Object.class))
+                                            .build())
+                            .build();
+            this.runner = Runner.builder().withEngine(engine).build();
+        }
+
+        if (textEncoderRunner != null) {
+            this.textEncoderRunner = textEncoderRunner;
+        } else {
+            var textEncoderEngine =
+                    Engine.builder()
+                            .addInvokables(
+                                    Invokables.builder("textencoder")
+                                            .add(
+                                                    new GuestFunction(
+                                                            "encode",
+                                                            List.of(String.class),
+                                                            String.class))
+                                            .build())
+                            .build();
+            this.textEncoderRunner = Runner.builder().withEngine(textEncoderEngine).build();
+        }
     }
 
-    public JsScriptEngine(Runner runner) {
-        this.runner = runner;
+    public Runner runner() {
+        return runner;
+    }
 
-        var textEncoderEngine =
-                Engine.builder()
-                        .addInvokables(
-                                Invokables.builder("textencoder")
-                                        .add(
-                                                new GuestFunction(
-                                                        "encode",
-                                                        List.of(String.class),
-                                                        String.class))
-                                        .build())
-                        .build();
-        this.textEncoderRunner = Runner.builder().withEngine(textEncoderEngine).build();
+    public Runner textEncoderRunner() {
+        return textEncoderRunner;
     }
 
     @Override

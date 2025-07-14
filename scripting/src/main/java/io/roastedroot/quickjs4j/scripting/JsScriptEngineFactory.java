@@ -1,5 +1,6 @@
 package io.roastedroot.quickjs4j.scripting;
 
+import io.roastedroot.quickjs4j.core.Runner;
 import io.roastedroot.quickjs4j.core.Version;
 import java.util.HashMap;
 import java.util.List;
@@ -87,8 +88,18 @@ public class JsScriptEngineFactory implements ScriptEngineFactory {
         return ret;
     }
 
+    private static Runner runner;
+    private static Runner textEncoderRunner;
+
     @Override
     public ScriptEngine getScriptEngine() {
-        return new JsScriptEngine();
+        var engine = new JsScriptEngine(runner, textEncoderRunner);
+        if (runner == null) {
+            runner = engine.runner();
+        }
+        if (textEncoderRunner == null) {
+            textEncoderRunner = engine.textEncoderRunner();
+        }
+        return engine;
     }
 }
