@@ -5,9 +5,12 @@ import io.roastedroot.quickjs4j.core.GuestException;
 import io.roastedroot.quickjs4j.core.GuestFunction;
 import io.roastedroot.quickjs4j.core.Invokables;
 import io.roastedroot.quickjs4j.core.Runner;
+import io.roastedroot.quickjs4j.core.ScriptCache;
 import java.io.IOException;
 import java.io.Reader;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import javax.script.AbstractScriptEngine;
 import javax.script.Bindings;
 import javax.script.ScriptContext;
@@ -18,61 +21,37 @@ import javax.script.SimpleBindings;
 public class JsScriptEngine extends AbstractScriptEngine {
 
     private final Runner runner;
-    private final Runner textEncoderRunner;
 
     public JsScriptEngine() {
-        this(null, null);
+        this(new ScriptCache());
     }
 
-    public JsScriptEngine(Runner runner, Runner textEncoderRunner) {
-        if (runner != null) {
-            this.runner = runner;
-        } else {
-            var engine =
-                    Engine.builder()
-                            .addInvokables(
-                                    Invokables.builder("quickjs4jScripting")
-                                            .add(
-                                                    new GuestFunction(
-                                                            "quickjsEval", List.of(), Object.class))
-                                            .build())
-                            .build();
-            this.runner = Runner.builder().withEngine(engine).build();
-        }
-
-        if (textEncoderRunner != null) {
-            this.textEncoderRunner = textEncoderRunner;
-        } else {
-            var textEncoderEngine =
-                    Engine.builder()
-                            .addInvokables(
-                                    Invokables.builder("textencoder")
-                                            .add(
-                                                    new GuestFunction(
-                                                            "encode",
-                                                            List.of(String.class),
-                                                            String.class))
-                                            .build())
-                            .build();
-            this.textEncoderRunner = Runner.builder().withEngine(textEncoderEngine).build();
-        }
-    }
-
-    public Runner runner() {
-        return runner;
-    }
-
-    public Runner textEncoderRunner() {
-        return textEncoderRunner;
+    public JsScriptEngine(ScriptCache cache) {
+        var engine =
+                Engine.builder()
+                        .withCache(cache)
+                        .addInvokables(
+                                Invokables.builder("quickjs4jScripting")
+                                        .add(
+                                                new GuestFunction(
+                                                        "quickjsEval",
+                                                        List.of(Object.class),
+                                                        Object.class))
+                                        .build())
+                        .build();
+        this.runner = Runner.builder().withEngine(engine).build();
     }
 
     @Override
     public Object eval(String script, ScriptContext context) throws ScriptException {
-        String scriptWithBindings = injectBindings(injectEval(script), context);
+        String scriptWithBindings = injectEval(script);
         try {
             var result =
                     runner.invokeGuestFunction(
-                            "quickjs4jScripting", "quickjsEval", List.of(), scriptWithBindings);
+                            "quickjs4jScripting",
+                            "quickjsEval",
+                            List.of(getBindings(context)),
+                            scriptWithBindings);
             if (runner.stdout() != null && runner.stdout().length() > 0) {
                 System.out.println(runner.stdout());
             }
@@ -103,37 +82,33 @@ public class JsScriptEngine extends AbstractScriptEngine {
     }
 
     private String injectEval(String script) {
-        return "export function quickjsEval() { " + script + " }";
+        return "export function quickjsEval(bindings) {\n"
+                + "  for (const [key, value] of Object.entries(bindings)) {\n"
+                + "    globalThis[key] = value;\n"
+                + "  };\n"
+                + script
+                + "\n"
+                + "}";
     }
 
-    private String injectBindings(String script, ScriptContext context) {
+    private Map<String, Object> getBindings(ScriptContext context) {
         // Merge GLOBAL_SCOPE and ENGINE_SCOPE, ENGINE_SCOPE takes precedence
         Bindings engineBindings = context.getBindings(ScriptContext.ENGINE_SCOPE);
         Bindings globalBindings = context.getBindings(ScriptContext.GLOBAL_SCOPE);
-        StringBuilder sb = new StringBuilder();
+        Map<String, Object> bindings = new HashMap<>();
         if (globalBindings != null) {
             for (String key : globalBindings.keySet()) {
                 if (engineBindings == null || !engineBindings.containsKey(key)) {
-                    sb.append(jsGlobalDecl(key, globalBindings.get(key)));
+                    bindings.put(key, toJsLiteral(globalBindings.get(key)));
                 }
             }
         }
         if (engineBindings != null) {
             for (String key : engineBindings.keySet()) {
-                sb.append(jsGlobalDecl(key, engineBindings.get(key)));
+                bindings.put(key, toJsLiteral(engineBindings.get(key)));
             }
         }
-        sb.append(script);
-        return sb.toString();
-    }
-
-    private String jsGlobalDecl(String name, Object value) {
-        // Only allow valid JS identifiers
-        if (!name.matches("[a-zA-Z_$][a-zA-Z0-9_$]*")) {
-            return "";
-        } else {
-            return "globalThis." + name + " = " + toJsLiteral(value) + ";\n";
-        }
+        return bindings;
     }
 
     private String toJsLiteral(Object value) {
@@ -141,18 +116,9 @@ public class JsScriptEngine extends AbstractScriptEngine {
             return "null";
         } else if (value instanceof Number || value instanceof Boolean) {
             return value.toString();
+        } else {
+            return value.toString();
         }
-
-        // here we use the same engine to run the text encoder
-        String encoded =
-                (String)
-                        textEncoderRunner.invokeGuestFunction(
-                                "textencoder",
-                                "encode",
-                                List.of(value.toString()),
-                                "function encode(str) { return JSON.stringify(Array.from(new"
-                                        + " TextEncoder().encode(str))); }");
-        return "new TextDecoder().decode(new Uint8Array(" + encoded + "))";
     }
 
     @Override
@@ -168,9 +134,6 @@ public class JsScriptEngine extends AbstractScriptEngine {
     public void close() {
         if (runner != null) {
             runner.close();
-        }
-        if (textEncoderRunner != null) {
-            textEncoderRunner.close();
         }
     }
 }
