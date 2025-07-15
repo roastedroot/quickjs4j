@@ -759,4 +759,21 @@ public class EngineTest {
 
         engine.close();
     }
+
+    @Test
+    public void supportAsyncAwait() throws Exception {
+        var engine = Engine.builder().build();
+
+        var jsSource =
+                "function debug() {\n"
+                        + "  return Promise.resolve(\"foo\");\n"
+                        + "}\n"
+                        + "console.log(await debug());";
+        var codePtr = engine.compile(jsSource);
+        engine.exec(codePtr);
+        assertEquals("foo\n", engine.stdout());
+
+        engine.free(codePtr);
+        engine.close();
+    }
 }

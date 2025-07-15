@@ -47,7 +47,10 @@ fn invoke_exec(module_str: String, name_str: String, args_str: String) -> String
 #[export_name = "initialize_runtime"]
 pub extern "C" fn initialize_runtime() {
     let mut config = Config::default();
-    config.text_encoding(true).javy_stream_io(true);
+    config
+        .event_loop(true)
+        .text_encoding(true)
+        .javy_stream_io(true);
 
     javy_plugin_api::initialize_runtime(config, |runtime| {
         runtime.context().with(|ctx| {
