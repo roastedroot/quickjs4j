@@ -4062,23 +4062,8 @@ var z = /* @__PURE__ */ Object.freeze({
 var stringSchema = z.string();
 async function validateString(str) {
   const result = await stringSchema.safeParseAsync(str);
-  console.log("my result is");
-  console.log(JSON.stringify(result));
   return result;
 }
-function validateString2(str) {
-  console.log("before");
-  Promise.resolve(validateString(str)).then(
-    (v) => {
-      console.log("have a result!");
-      return v;
-    },
-    (e) => {
-      console.log("error " + e);
-    }
-  );
-}
 export {
-  validateString,
-  validateString2
+  validateString
 };
