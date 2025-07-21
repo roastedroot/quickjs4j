@@ -118,6 +118,24 @@ public final class Engine implements AutoCloseable {
                 moduleName, name, args, compilePortableGuestFunction(libraryCode));
     }
 
+    public String invokeFunction() {
+        var funInvoke =
+                "globalThis[quickjs4j_engine.module_name()][quickjs4j_engine.function_name()](...JSON.parse(quickjs4j_engine.args()))";
+        Function<String, String> setResult =
+                (value) ->
+                        "java_invoke(quickjs4j_engine.module_name(),"
+                                + " quickjs4j_engine.function_name() + \"_set_result\","
+                                + " JSON.stringify(["
+                                + value
+                                + "]))";
+
+        return "Promise.resolve("
+                + funInvoke
+                + ").then((value) => { "
+                + setResult.apply("value")
+                + " }, (err) => { throw err; })";
+    }
+
     // Plan:
     // we compile a static version of the module and we invoke it parametrically using a basic
     // protocol
@@ -125,9 +143,8 @@ public final class Engine implements AutoCloseable {
     public byte[] compilePortableGuestFunction(String libraryCode) {
         int codePtr = 0;
         try {
-            var moduleName = ENGINE_MODULE_NAME + "." + MODULE_NAME_FUNC + "()";
-            var functionName = ENGINE_MODULE_NAME + "." + FUNCTION_NAME_FUNC + "()";
-            var args = ENGINE_MODULE_NAME + "." + ARGS_FUNC + "()";
+            var invokeFunction = invokeFunction();
+
             String jsCode =
                     new String(jsPrelude(), UTF_8)
                             + "\n"
@@ -135,18 +152,8 @@ public final class Engine implements AutoCloseable {
                             + "\n"
                             + new String(jsSuffix(), UTF_8)
                             + "\n"
-                            + "java_invoke("
-                            + moduleName
-                            + ", "
-                            + functionName
-                            + " + \"_set_result\","
-                            + " JSON.stringify([globalThis["
-                            + moduleName
-                            + "]["
-                            + functionName
-                            + "](...JSON.parse("
-                            + args
-                            + "))]));";
+                            + invokeFunction
+                            + ";\n";
 
             // System.out.println(jsCode);
 

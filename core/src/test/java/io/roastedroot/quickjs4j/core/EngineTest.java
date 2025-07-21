@@ -759,4 +759,48 @@ public class EngineTest {
 
         engine.close();
     }
+
+    @Test
+    public void supportAsyncAwait() throws Exception {
+        var engine = Engine.builder().build();
+
+        var jsSource =
+                "function debug() {\n"
+                        + "  return Promise.resolve(\"foo\");\n"
+                        + "}\n"
+                        + "console.log(await debug());";
+        var codePtr = engine.compile(jsSource);
+        engine.exec(codePtr);
+        assertEquals("foo\n", engine.stdout());
+
+        engine.free(codePtr);
+        engine.close();
+    }
+
+    @Test
+    public void testAsyncFunctionInvocation() throws Exception {
+        var invokable =
+                Invokables.builder("from_js")
+                        .add(
+                                new GuestFunction(
+                                        "validateString", List.of(String.class), ZodResult.class))
+                        .build();
+        var engine = Engine.builder().addInvokables(invokable).build();
+
+        var jsSource =
+                EngineTest.class.getResourceAsStream("/zod-async/dist/out.js").readAllBytes();
+
+        var result =
+                (ZodResult)
+                        engine.invokeGuestFunction(
+                                "from_js",
+                                "validateString",
+                                List.of("tuna"),
+                                new String(jsSource, StandardCharsets.UTF_8));
+
+        assertTrue(result.success);
+        assertEquals("tuna", result.data);
+
+        engine.close();
+    }
 }

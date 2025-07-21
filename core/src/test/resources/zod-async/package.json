@@ -1,0 +1,17 @@
+{
+    "scripts": {
+        "build": "esbuild --charset=utf8 index.ts --bundle --outfile=dist/out.js --format=esm",
+        "clean": "rimraf dist node_modules"
+    },
+    "dependencies": {
+        "cowsay": "^1.6.0",
+        "tslib": "^2.8.1",
+        "zod": "^3.24.2"
+    },
+    "devDependencies": {
+        "esbuild": "0.25.2",
+        "esbuild-plugin-tsc": "^0.5.0",
+        "rimraf": "^6.0.1",
+        "typescript": "^5.8.3"
+    }
+}
