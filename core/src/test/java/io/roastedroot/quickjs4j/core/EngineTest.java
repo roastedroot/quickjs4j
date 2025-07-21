@@ -776,4 +776,31 @@ public class EngineTest {
         engine.free(codePtr);
         engine.close();
     }
+
+    @Test
+    public void testAsyncFunctionInvocation() throws Exception {
+        var invokable =
+                Invokables.builder("from_js")
+                        .add(
+                                new GuestFunction(
+                                        "validateString", List.of(String.class), ZodResult.class))
+                        .build();
+        var engine = Engine.builder().addInvokables(invokable).build();
+
+        var jsSource =
+                EngineTest.class.getResourceAsStream("/zod-async/dist/out.js").readAllBytes();
+
+        var result =
+                (ZodResult)
+                        engine.invokeGuestFunction(
+                                "from_js",
+                                "validateString",
+                                List.of("tuna"),
+                                new String(jsSource, StandardCharsets.UTF_8));
+
+        assertTrue(result.success);
+        assertEquals("tuna", result.data);
+
+        engine.close();
+    }
 }
