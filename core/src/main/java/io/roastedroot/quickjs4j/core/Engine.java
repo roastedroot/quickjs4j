@@ -23,7 +23,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 @WasmModuleInterface(WasmResource.absoluteFile)
 public final class Engine implements AutoCloseable {
@@ -233,22 +232,12 @@ public final class Engine implements AutoCloseable {
         try {
             JsonNode tree = mapper.readTree(argsString);
 
-            if (tree.size() != receiver.paramTypes().size()) {
-                throw new IllegalArgumentException(
-                        "Function "
-                                + receiver.name()
-                                + " has been invoked with the incorrect number of parameters"
-                                + " needs: "
-                                + receiver.paramTypes().stream()
-                                        .map(Class::getCanonicalName)
-                                        .collect(Collectors.joining(", "))
-                                + ", found: "
-                                + tree.size());
-            }
-
-            for (int i = 0; i < tree.size(); i++) {
+            for (int i = 0; i < receiver.paramTypes().size(); i++) {
                 var clazz = receiver.paramTypes().get(i);
-                var value = tree.get(i);
+                JsonNode value = null;
+                if (tree.size() > i) {
+                    value = tree.get(i);
+                }
 
                 if (clazz == HostRef.class) {
                     argsList.add(javaRefs.get(value.intValue()));
