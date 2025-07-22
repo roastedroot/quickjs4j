@@ -575,7 +575,7 @@ public final class Engine implements AutoCloseable {
                 finalInvokables.put(invokable.moduleName(), invokable);
             }
             if (cache == null) {
-                cache = new ScriptCache();
+                cache = new BasicScriptCache();
             }
             return new Engine(finalBuiltins, finalInvokables, mapper, memoryFactory, cache);
         }
