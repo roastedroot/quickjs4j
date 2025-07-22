@@ -39,6 +39,68 @@ public class RunnerTest {
     }
 
     @Test
+    public void expandArgsWithNulls() {
+        // Arrange
+        var invoked = new AtomicBoolean(false);
+        var builtins =
+                Builtins.builder("from_java")
+                        .add(
+                                new HostFunction(
+                                        "java_check",
+                                        List.of(Integer.class, Integer.class),
+                                        Integer.class,
+                                        (args) -> {
+                                            invoked.set(true);
+                                            assertEquals(1, args.get(0));
+                                            assertEquals(null, args.get(1));
+                                            assertEquals(2, args.size());
+                                            return 1;
+                                        }))
+                        .build();
+        var jsEngine = Engine.builder().addBuiltins(builtins).build();
+        var runner = Runner.builder().withEngine(jsEngine).build();
+
+        // Act
+        runner.compileAndExec("from_java.java_check(1);");
+
+        // Assert
+        assertTrue(invoked.get());
+
+        runner.close();
+    }
+
+    @Test
+    public void adaptArgsWithNulls() {
+        // Arrange
+        var invoked = new AtomicBoolean(false);
+        var builtins =
+                Builtins.builder("from_java")
+                        .add(
+                                new HostFunction(
+                                        "java_check",
+                                        List.of(Integer.class, Integer.class),
+                                        Integer.class,
+                                        (args) -> {
+                                            invoked.set(true);
+                                            assertEquals(1, args.get(0));
+                                            assertEquals(2, args.get(1));
+                                            assertEquals(2, args.size());
+                                            return 1;
+                                        }))
+                        .build();
+        var jsEngine = Engine.builder().addBuiltins(builtins).build();
+        var runner = Runner.builder().withEngine(jsEngine).build();
+
+        // Act
+        runner.compileAndExec("from_java.java_check(1, 2, 3);");
+
+        // Assert
+        assertTrue(invoked.get());
+
+        runner.close();
+    }
+
+    @Test
     public void fullUsage() {
         // Arrange
         var invoked = new AtomicBoolean(false);
