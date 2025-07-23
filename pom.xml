@@ -64,7 +64,7 @@
     <maven-failsafe-plugin.version>3.5.3</maven-failsafe-plugin.version>
 
     <!-- test time versions -->
-    <junit.version>5.13.3</junit.version>
+    <junit.version>5.13.4</junit.version>
 
     <!-- runtime versions -->
     <chicory.version>1.5.1</chicory.version>
