@@ -5,6 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonDeserializer;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeoutException;
@@ -349,5 +354,100 @@ public class RunnerTest {
                 Runner.builder().withExecutorService(Executors.newCachedThreadPool()).build()) {
             runner.compileAndExec("console.log('something something');");
         }
+    }
+
+    @JsonDeserialize(using = JsonDeserializer.None.class)
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public static class DemoProps {
+        @JsonProperty("name")
+        public String name;
+
+        @JsonProperty("count")
+        public int count;
+
+        public DemoProps(String name, int count) {
+            this.name = name;
+            this.count = count;
+        }
+    }
+
+    @Test
+    public void demoSSR() throws Exception {
+        // Arrange
+        var invokables =
+                Invokables.builder("from_js")
+                        .add(
+                                new GuestFunction(
+                                        "ssr",
+                                        List.of(String.class, DemoProps.class),
+                                        String.class))
+                        .build();
+
+        var libraryCode =
+                RunnerTest.class.getResourceAsStream("/ssr-demo/dist/out.js").readAllBytes();
+
+        var jsEngine = Engine.builder().addInvokables(invokables).build();
+        var runner = Runner.builder().withEngine(jsEngine).build();
+
+        var jsx =
+                "(props) => {\n"
+                    + "    const { name, count } = props;\n"
+                    + "    return (\n"
+                    + "      <div style={{ padding: \"20px\", fontFamily: \"sans-serif\" }}>\n"
+                    + "        <h1>Welcome, {name}!</h1>\n"
+                    + "        {count > 0\n"
+                    + "          ? <p>You have {count} new {count === 1 ? \"message\" :"
+                    + " \"messages\"}.</p>\n"
+                    + "          : <p>No new messages.</p>}\n"
+                    + "        <ul>\n"
+                    + "          {[...Array(count)].map((_, i) => (\n"
+                    + "            <li key={i}>Message #{i + 1}</li>\n"
+                    + "          ))}\n"
+                    + "        </ul>\n"
+                    + "        <footer style={{ marginTop: \"10px\", fontSize: \"0.8em\", color:"
+                    + " \"#666\" }}>\n"
+                    + "          Generated at {new Date().toLocaleTimeString()}\n"
+                    + "        </footer>\n"
+                    + "      </div>\n"
+                    + "    );\n"
+                    + "  }";
+
+        // Act
+        var before1 = System.nanoTime();
+        var result1 =
+                (String)
+                        runner.invokeGuestFunction(
+                                "from_js",
+                                "ssr",
+                                List.of(jsx, new DemoProps("Alice", 3)),
+                                new String(libraryCode, StandardCharsets.UTF_8));
+        var after1 = System.nanoTime();
+        System.out.println("with compilation: " + (after1 - before1) / 1_000_000 + " s");
+
+        // Assert
+        System.out.println("result1: " + result1);
+        assertTrue(result1.contains("Welcome, <!-- -->Alice<!-- -->!"));
+
+        var before2 = System.nanoTime();
+        var result2 =
+                (String)
+                        runner.invokeGuestFunction(
+                                "from_js",
+                                "ssr",
+                                List.of(jsx, new DemoProps("Bob", 0)),
+                                new String(libraryCode, StandardCharsets.UTF_8));
+        var after2 = System.nanoTime();
+        System.out.println("with cached compilation: " + (after2 - before2) / 1_000_000 + " s");
+
+        System.out.println("result2: " + result2);
+        assertTrue(result2.contains("Welcome, <!-- -->Bob<!-- -->!"));
+
+        System.out.println("stdout:");
+        System.out.println(runner.stdout());
+
+        System.err.println("stderr:");
+        System.err.println(runner.stderr());
+
+        runner.close();
     }
 }
