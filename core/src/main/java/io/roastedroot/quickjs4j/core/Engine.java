@@ -3,6 +3,8 @@ package io.roastedroot.quickjs4j.core;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.dylibso.chicory.annotations.WasmModuleInterface;
+import com.dylibso.chicory.log.Logger;
+import com.dylibso.chicory.log.SystemLogger;
 import com.dylibso.chicory.runtime.ByteArrayMemory;
 import com.dylibso.chicory.runtime.HostFunction;
 import com.dylibso.chicory.runtime.ImportValues;
@@ -63,7 +65,8 @@ public final class Engine implements AutoCloseable {
             Map<String, Invokables> invokables,
             ObjectMapper mapper,
             Function<MemoryLimits, Memory> memoryFactory,
-            ScriptCache cache) {
+            ScriptCache cache,
+            Logger logger) {
         this.mapper = mapper;
         this.builtins = builtins;
         this.cache = cache;
@@ -80,7 +83,7 @@ public final class Engine implements AutoCloseable {
         var wasiOptsBuilder = WasiOptions.builder().withStdout(stdout).withStderr(stderr);
 
         this.wasiOpts = wasiOptsBuilder.build();
-        this.wasi = WasiPreview1.builder().withOptions(this.wasiOpts).build();
+        this.wasi = WasiPreview1.builder().withOptions(this.wasiOpts).withLogger(logger).build();
         // set_result builtins
         invokables.entrySet().stream()
                 .forEach(
@@ -529,6 +532,7 @@ public final class Engine implements AutoCloseable {
         private ObjectMapper mapper;
         private Function<MemoryLimits, Memory> memoryFactory;
         private ScriptCache cache;
+        private Logger logger;
 
         private Builder() {}
 
@@ -557,6 +561,11 @@ public final class Engine implements AutoCloseable {
             return this;
         }
 
+        public Builder withLogger(Logger logger) {
+            this.logger = logger;
+            return this;
+        }
+
         public Engine build() {
             if (mapper == null) {
                 mapper = DEFAULT_OBJECT_MAPPER;
@@ -577,7 +586,10 @@ public final class Engine implements AutoCloseable {
             if (cache == null) {
                 cache = new BasicScriptCache();
             }
-            return new Engine(finalBuiltins, finalInvokables, mapper, memoryFactory, cache);
+            if (logger == null) {
+                logger = new SystemLogger();
+            }
+            return new Engine(finalBuiltins, finalInvokables, mapper, memoryFactory, cache, logger);
         }
     }
 }
