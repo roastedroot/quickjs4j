@@ -57,7 +57,7 @@ jobs:
         java-version: '${{ matrix.java-version }}'
         cache: maven
 
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v5
       with:
         name: javy_quickjs4j_plugin
 
