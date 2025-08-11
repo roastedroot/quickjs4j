@@ -290,7 +290,6 @@ public final class InvokablesProcessor extends Quickjs4jAbstractProcessor {
         NodeList<Expression> paramTypes = extractParameters(executable);
 
         // compute return type and conversion
-        String returnName = executable.getReturnType().toString();
         Expression returnType = extractReturn(executable);
 
         // create Js function
