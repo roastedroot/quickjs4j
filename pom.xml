@@ -53,7 +53,7 @@
     <project.build.outputTimestamp>2025-08-04T08:41:59Z</project.build.outputTimestamp>
 
     <!-- build tool versions -->
-    <checkstyle.version>11.0.0</checkstyle.version>
+    <checkstyle.version>11.0.1</checkstyle.version>
     <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
     <spotless-maven-plugin.version>2.46.1</spotless-maven-plugin.version>
     <templating-maven-plugin.version>3.0.0</templating-maven-plugin.version>
