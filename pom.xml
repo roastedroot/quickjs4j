@@ -75,63 +75,6 @@
   <build>
     <pluginManagement>
       <plugins>
-
-        <plugin>
-          <groupId>com.diffplug.spotless</groupId>
-          <artifactId>spotless-maven-plugin</artifactId>
-          <version>${spotless-maven-plugin.version}</version>
-          <configuration>
-            <formats>
-              <format>
-                <includes>
-                  <include>*.md</include>
-                  <include>.gitignore</include>
-                </includes>
-                <trimTrailingWhitespace/>
-                <endWithNewline/>
-                <indent>
-                  <spaces>true</spaces>
-                  <spacesPerTab>2</spacesPerTab>
-                </indent>
-              </format>
-            </formats>
-            <java>
-              <includes>
-                <include>**/src/main/java/**/*.java</include>
-                <include>**/src/test/java/**/*.java</include>
-              </includes>
-              <googleJavaFormat>
-                <version>1.18.1</version>
-                <style>AOSP</style>
-                <reflowLongStrings>true</reflowLongStrings>
-                <formatJavadoc>false</formatJavadoc>
-              </googleJavaFormat>
-              <importOrder/>
-              <replaceRegex>
-                <name>Remove wildcard imports</name>
-                <searchRegex>import\s+(?:static\s+)?[^\*\s]+\*;(\r\n|\r|\n)</searchRegex>
-                <replacement>$1</replacement>
-              </replaceRegex>
-              <removeUnusedImports/>
-            </java>
-            <pom>
-              <includes>
-                <include>**/pom.xml</include>
-              </includes>
-              <excludes>
-                <exclude>**/target/**/*.xml</exclude>
-              </excludes>
-              <sortPom>
-                <expandEmptyElements>false</expandEmptyElements>
-                <sortModules>true</sortModules>
-                <sortDependencies>scope,groupId,artifactId</sortDependencies>
-                <sortDependencyExclusions>groupId,artifactId</sortDependencyExclusions>
-                <sortPlugins>groupId,artifactId</sortPlugins>
-              </sortPom>
-            </pom>
-          </configuration>
-        </plugin>
-
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-compiler-plugin</artifactId>
@@ -174,7 +117,6 @@
       </build>
     </profile>
 
-
     <profile>
       <id>java17</id>
       <activation>
@@ -182,6 +124,70 @@
       </activation>
       <build>
         <plugins>
+          <plugin>
+            <groupId>com.diffplug.spotless</groupId>
+            <artifactId>spotless-maven-plugin</artifactId>
+            <version>${spotless-maven-plugin.version}</version>
+            <configuration>
+              <formats>
+                <format>
+                  <includes>
+                    <include>*.md</include>
+                    <include>.gitignore</include>
+                  </includes>
+                  <trimTrailingWhitespace/>
+                  <endWithNewline/>
+                  <indent>
+                    <spaces>true</spaces>
+                    <spacesPerTab>2</spacesPerTab>
+                  </indent>
+                </format>
+              </formats>
+              <java>
+                <includes>
+                  <include>**/src/main/java/**/*.java</include>
+                  <include>**/src/test/java/**/*.java</include>
+                </includes>
+                <googleJavaFormat>
+                  <version>1.18.1</version>
+                  <style>AOSP</style>
+                  <reflowLongStrings>true</reflowLongStrings>
+                  <formatJavadoc>false</formatJavadoc>
+                </googleJavaFormat>
+                <importOrder/>
+                <replaceRegex>
+                  <name>Remove wildcard imports</name>
+                  <searchRegex>import\s+(?:static\s+)?[^\*\s]+\*;(\r\n|\r|\n)</searchRegex>
+                  <replacement>$1</replacement>
+                </replaceRegex>
+                <removeUnusedImports/>
+              </java>
+              <pom>
+                <includes>
+                  <include>**/pom.xml</include>
+                </includes>
+                <excludes>
+                  <exclude>**/target/**/*.xml</exclude>
+                </excludes>
+                <sortPom>
+                  <expandEmptyElements>false</expandEmptyElements>
+                  <sortModules>true</sortModules>
+                  <sortDependencies>scope,groupId,artifactId</sortDependencies>
+                  <sortDependencyExclusions>groupId,artifactId</sortDependencyExclusions>
+                  <sortPlugins>groupId,artifactId</sortPlugins>
+                </sortPom>
+              </pom>
+            </configuration>
+            <executions>
+              <execution>
+                <id>format</id>
+                <goals>
+                  <goal>check</goal>
+                </goals>
+                <phase>process-sources</phase>
+              </execution>
+            </executions>
+          </plugin>
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-checkstyle-plugin</artifactId>
