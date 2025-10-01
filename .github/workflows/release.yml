@@ -40,15 +40,6 @@ jobs:
           cat <(echo -e "${{ secrets.java_gpg_secret_key }}") | gpg --batch --import
           gpg --list-secret-keys --keyid-format LONG
 
-      - name: Set up Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-
-      - name: Build the Javy plugin
-        working-directory: javy-plugin
-        run: |
-          rustup target add wasm32-wasip1
-          make build
-
       - name: Compile
         run: mvn --batch-mode clean install -DskipTests
 
