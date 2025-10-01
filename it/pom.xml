@@ -5,7 +5,7 @@
   <parent>
     <groupId>io.roastedroot</groupId>
     <artifactId>quickjs4j-parent</artifactId>
-    <version>0.0.10</version>
+    <version>999-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
 
