@@ -17,28 +17,7 @@ permissions:
   checks: write
 
 jobs:
-
-  prepare-javy-plugin:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Set up Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-
-      - name: Build the Javy plugin
-        working-directory: javy-plugin
-        run: |
-          rustup target add wasm32-wasip1
-          make build
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: javy_quickjs4j_plugin
-          path: javy-plugin/target/wasm32-wasip1/release/javy_quickjs4j_plugin.wasm
-
   build:
-    needs: prepare-javy-plugin
     runs-on: ${{ matrix.os }}
     continue-on-error: true
     strategy:
@@ -56,10 +35,6 @@ jobs:
         distribution: 'temurin'
         java-version: '${{ matrix.java-version }}'
         cache: maven
-
-    - uses: actions/download-artifact@v5
-      with:
-        name: javy_quickjs4j_plugin
 
     - name: Test quickjs4j
       run: mvn -B install
