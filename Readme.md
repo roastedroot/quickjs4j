@@ -10,8 +10,20 @@ QuickJs4J provides a secure and efficient way to execute JavaScript within Java.
 * **No system access by default** – JavaScript cannot access the filesystem, network, or other sensitive resources unless explicitly allowed.
 * **Portability** – Being pure Java bytecode, it runs wherever the JVM does.
 * **Native-image friendly** – Compatible with GraalVM's native-image for fast, lightweight deployments.
+* **Forward compatible** - regular Java bytecode is generated without using Unsafe, so there is no concern version of quickjs4j you are using now will break when you upgrade to newer Java runtime
 
 Whether you're embedding scripting capabilities or isolating untrusted code, QuickJs4J is designed for safe and seamless integration.
+
+## How it works
+
+There are a few steps to achieve the result:
+
+- compile QuickJS to [WebAssembly](https://webassembly.org/)
+- translate the QuickJS  payload to pure Java bytecode using [Chicory Compiler](https://chicory.dev/docs/usage/build-time-compiler)
+- run QuickJS directly from Java without using JNI
+- ship an extremely small and self contained `jar` that can run wherever the JVM can go!
+
+Very similar to how it is done in the [SQLite4j](https://github.com/roastedroot/sqlite4j?tab=readme-ov-file#how-it-works) project.
 
 ## Quick Start
 
