@@ -7,3 +7,8 @@ export function add(x, y) {
 
     return x + y;
 }
+
+export function append(arr, elem) {
+    arr.push(elem);
+    return arr;
+}
