@@ -235,11 +235,12 @@ public final class InvokablesProcessor extends Quickjs4jAbstractProcessor {
                 returnType = addPrimitiveReturn("java.lang.Boolean");
                 break;
             default:
+                var typeLiteral = removeGenerics(returnName);
                 if (annotatedWith(executable, ReturnsHostRef.class)) {
                     var javaRefType = "io.roastedroot.quickjs4j.core.HostRef";
                     returnType = new FieldAccessExpr(new NameExpr(javaRefType), "class");
                 } else {
-                    returnType = new FieldAccessExpr(new NameExpr(returnName), "class");
+                    returnType = new FieldAccessExpr(new NameExpr(typeLiteral), "class");
                 }
                 break;
         }
@@ -267,7 +268,7 @@ public final class InvokablesProcessor extends Quickjs4jAbstractProcessor {
                     paramTypes.add(new FieldAccessExpr(new NameExpr("java.lang.Boolean"), "class"));
                     break;
                 default:
-                    var typeLiteral = parameter.asType().toString();
+                    var typeLiteral = removeGenerics(parameter.asType().toString());
                     if (annotatedWith(parameter, HostRefParam.class)) {
                         var javaRefType = "io.roastedroot.quickjs4j.core.HostRef";
                         paramTypes.add(new FieldAccessExpr(new NameExpr(javaRefType), "class"));
@@ -277,6 +278,15 @@ public final class InvokablesProcessor extends Quickjs4jAbstractProcessor {
             }
         }
         return paramTypes;
+    }
+
+    private String removeGenerics(String typeLiteral) {
+        var genericIndex = typeLiteral.indexOf('<');
+        if (genericIndex > 0) {
+            return typeLiteral.substring(0, genericIndex);
+        } else {
+            return typeLiteral;
+        }
     }
 
     private Expression processGuestFunction(ExecutableElement executable) {

@@ -8,6 +8,11 @@ function add(x, y) {
   log(`add: ${x} ${y}`);
   return x + y;
 }
+function append(arr, elem) {
+  arr.push(elem);
+  return arr;
+}
 export {
-  add
+  add,
+  append
 };
