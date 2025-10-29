@@ -23,7 +23,7 @@ There are a few steps to achieve the result:
 - run QuickJS directly from Java without using JNI
 - ship an extremely small and self contained `jar` that can run wherever the JVM can go!
 
-Very similar to how it is done in the [SQLite4j](https://github.com/roastedroot/sqlite4j?tab=readme-ov-file#how-it-works) project.
+
 
 ## Quick Start
 
