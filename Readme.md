@@ -10,7 +10,7 @@ QuickJs4J provides a secure and efficient way to execute JavaScript within Java.
 * **No system access by default** – JavaScript cannot access the filesystem, network, or other sensitive resources unless explicitly allowed.
 * **Portability** – Being pure Java bytecode, it runs wherever the JVM does.
 * **Native-image friendly** – Compatible with GraalVM's native-image for fast, lightweight deployments.
-* **Forward compatible** - regular Java bytecode is generated without using Unsafe, so there is no concern version of quickjs4j you are using now will break when you upgrade to newer Java runtime
+* **Forward compatible** - regular Java bytecode is generated, so there is no concern version of quickjs4j you are using now will break when you upgrade to newer Java runtime
 
 Whether you're embedding scripting capabilities or isolating untrusted code, QuickJs4J is designed for safe and seamless integration.
 
