@@ -68,7 +68,7 @@
 
     <!-- runtime versions -->
     <chicory.version>1.5.3</chicory.version>
-    <jackson.version>2.20.0</jackson.version>
+    <jackson.version>2.20.1</jackson.version>
     <javaparser.version>3.27.1</javaparser.version>
   </properties>
 
