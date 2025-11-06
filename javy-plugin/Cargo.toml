@@ -7,4 +7,4 @@ name = "javy_quickjs4j_plugin"
 crate-type = ["cdylib"]
 
 [dependencies]
-javy-plugin-api = "3.0.0"
+javy-plugin-api = "4.1.0"
