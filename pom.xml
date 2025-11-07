@@ -4,7 +4,7 @@
 
   <groupId>io.roastedroot</groupId>
   <artifactId>quickjs4j-parent</artifactId>
-  <version>999-SNAPSHOT</version>
+  <version>0.0.12</version>
   <packaging>pom</packaging>
 
   <name>quickjs4j-parent</name>
@@ -50,7 +50,7 @@
     <maven.compiler.release>11</maven.compiler.release>
     <maven.compiler.failOnWarning>true</maven.compiler.failOnWarning>
     <maven.dependency.failOnWarning>true</maven.dependency.failOnWarning>
-    <project.build.outputTimestamp>2025-10-28T11:13:41Z</project.build.outputTimestamp>
+    <project.build.outputTimestamp>2025-11-07T10:18:36Z</project.build.outputTimestamp>
 
     <!-- build tool versions -->
     <checkstyle.version>12.1.1</checkstyle.version>
