@@ -21,7 +21,7 @@ The threat model for QuickJs4J identifies critical vulnerabilities at the bounda
 - Integrators are assumed to wrap host function calls in try-catch blocks to prevent information leakage.
 - A single Engine instance is not thread-safe; serialized access must be enforced by the integrator (e.g., via a single-thread executor).
 - Configurable memory and execution time limits are the primary defenses against guest-induced resource exhaustion (DoS) attacks.
-- The default script cache uses MD5 and is vulnerable to cache poisoning attacks if a stronger implementation is not provided.
+- ~~The default script cache uses MD5 and is vulnerable to cache poisoning attacks if a stronger implementation is not provided.~~ Fixed in: #108
 - The impact of a cache poisoning attack is assumed to be limited to returning manipulated data, not escaping the sandbox.
 - All data crosses the host-guest boundary via explicit serialization (JSON) or as opaque host references, not via shared memory.
 - Only Java methods explicitly annotated with `@HostFunction` are exposed, preventing accidental exposure of unintended functionality.
