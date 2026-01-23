@@ -55,7 +55,7 @@
     <!-- build tool versions -->
     <checkstyle.version>13.0.0</checkstyle.version>
     <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
-    <spotless-maven-plugin.version>3.1.0</spotless-maven-plugin.version>
+    <spotless-maven-plugin.version>3.2.0</spotless-maven-plugin.version>
     <templating-maven-plugin.version>3.1.0</templating-maven-plugin.version>
     <maven-compiler-plugin.version>3.14.1</maven-compiler-plugin.version>
     <surefire-plugin.version>3.5.2</surefire-plugin.version>
