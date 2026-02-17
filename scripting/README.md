@@ -94,7 +94,7 @@ compiled.eval();  // 14
 
 ## Invocable — Calling JavaScript Functions
 
-The engine implements `javax.script.Invocable`, providing three ways to call JavaScript code from Java.
+The engine implements `javax.script.Invocable`.
 
 ### invokeFunction
 
@@ -132,8 +132,8 @@ invocable.invokeMethod("calc", "add", 2, 3);       // 5
 invocable.invokeMethod("calc", "multiply", 2, 3);   // 6
 ```
 
-> **Design note:** Because values cross a WASM boundary via JSON serialization, live JavaScript object references cannot be held in Java.
-> The `thiz` parameter is therefore a `String` naming a variable in JavaScript's global scope, rather than a Java object returned from a previous `eval()`.
+> **Limitation:** Because values cross a WASM boundary via JSON serialization, live JavaScript object references cannot be held in Java.
+> Unlike Nashorn or JRuby, the `thiz` parameter must be a `String` naming a variable in JavaScript's global scope — not a Java object returned from a previous `eval()`. Passing a non-String object throws `IllegalArgumentException`.
 
 ### getInterface
 
@@ -160,7 +160,7 @@ calc.add(2, 3);       // 5
 calc.multiply(2, 3);  // 6
 ```
 
-Or bind it to methods on a JavaScript object using the two-argument form:
+Or bind it to methods on a JavaScript object using the two-argument form. As with `invokeMethod`, `thiz` must be a `String` variable name:
 
 ```java
 engine.eval("var math = {"

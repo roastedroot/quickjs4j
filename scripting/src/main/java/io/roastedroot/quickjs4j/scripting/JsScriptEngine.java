@@ -147,8 +147,8 @@ public class JsScriptEngine extends AbstractScriptEngine
                         clazz.getClassLoader(),
                         new Class<?>[] {clazz},
                         (proxy, method, methodArgs) -> {
-                            if (isObjectMethod(method.getName(), method.getParameterCount())) {
-                                return handleObjectMethod(proxy, method.getName(), methodArgs);
+                            if (method.getDeclaringClass() == Object.class) {
+                                return handleObjectMethod(proxy, method, methodArgs);
                             }
                             return invokeFunction(
                                     method.getName(),
@@ -173,8 +173,8 @@ public class JsScriptEngine extends AbstractScriptEngine
                         clazz.getClassLoader(),
                         new Class<?>[] {clazz},
                         (proxy, method, methodArgs) -> {
-                            if (isObjectMethod(method.getName(), method.getParameterCount())) {
-                                return handleObjectMethod(proxy, method.getName(), methodArgs);
+                            if (method.getDeclaringClass() == Object.class) {
+                                return handleObjectMethod(proxy, method, methodArgs);
                             }
                             return invokeMethod(
                                     thiz,
@@ -292,22 +292,16 @@ public class JsScriptEngine extends AbstractScriptEngine
                         || msg.contains("not a function"));
     }
 
-    private boolean isObjectMethod(String name, int paramCount) {
-        return ("toString".equals(name) && paramCount == 0)
-                || ("hashCode".equals(name) && paramCount == 0)
-                || ("equals".equals(name) && paramCount == 1);
-    }
-
-    private Object handleObjectMethod(Object proxy, String name, Object[] args) {
-        switch (name) {
-            case "toString":
-                return proxy.getClass().getName();
-            case "hashCode":
-                return System.identityHashCode(proxy);
-            case "equals":
-                return proxy == args[0];
-            default:
-                throw new UnsupportedOperationException(name);
+    private Object handleObjectMethod(Object proxy, java.lang.reflect.Method method, Object[] args)
+            throws ReflectiveOperationException {
+        if ("equals".equals(method.getName())) {
+            return proxy == args[0];
         }
+        if ("hashCode".equals(method.getName())) {
+            return System.identityHashCode(proxy);
+        }
+        // toString and any other Object method — invoke on a plain Object
+        // to avoid infinite recursion through the proxy
+        return method.invoke(new Object(), args);
     }
 }
