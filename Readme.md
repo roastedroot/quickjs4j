@@ -191,6 +191,26 @@ try (var calculator = new Calculator_Proxy(jsLibrary, new CalculatorContext()) {
 
 > ***_NOTE:_*** currently only basic use is supported.
 
+## JSR-223 Scripting Engine
+
+QuickJs4J also provides a [JSR-223](https://www.jcp.org/en/jsr/detail?id=223) (`javax.script`) compliant scripting engine with `Compilable` and `Invocable` support:
+
+```java
+import javax.script.*;
+
+ScriptEngine engine = new ScriptEngineManager().getEngineByName("quickjs4j");
+
+engine.eval("1 + 2");  // 3
+
+engine.put("name", "World");
+engine.eval("'Hello, ' + name");  // "Hello, World"
+
+engine.eval("function add(a, b) { return a + b; }");
+((Invocable) engine).invokeFunction("add", 3, 4);  // 7
+```
+
+See the full [JSR-223 scripting documentation](scripting/README.md) for details on bindings, `Compilable`, `Invocable` (`invokeFunction`, `invokeMethod`, `getInterface`), output redirection, and more.
+
 ## Building a JS/TS Library
 
 To build your JavaScript/TypeScript library, refer to [this example](it/src/it/apicurio-example/src/main/resources/library).
