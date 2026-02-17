@@ -1,5 +1,6 @@
 package io.roastedroot.quickjs4j.scripting;
 
+import io.roastedroot.quickjs4j.core.BasicScriptCache;
 import io.roastedroot.quickjs4j.core.ScriptCache;
 import io.roastedroot.quickjs4j.core.Version;
 import java.util.HashMap;
@@ -62,15 +63,16 @@ public class JsScriptEngineFactory implements ScriptEngineFactory {
 
     @Override
     public String getMethodCallSyntax(String obj, String m, String... args) {
-        String ret = "java_invoke(\"" + obj + "\",\"" + m + "\",JSON.stringify([";
+        StringBuilder sb = new StringBuilder();
+        sb.append(obj).append(".").append(m).append("(");
         for (int i = 0; i < args.length; i++) {
-            ret += args[i];
-            if (i < args.length - 1) {
-                ret += ",";
+            if (i > 0) {
+                sb.append(", ");
             }
+            sb.append(args[i]);
         }
-        ret += "]);";
-        return ret;
+        sb.append(")");
+        return sb.toString();
     }
 
     @Override
@@ -88,7 +90,7 @@ public class JsScriptEngineFactory implements ScriptEngineFactory {
         return ret;
     }
 
-    private static final ScriptCache cache = new ScriptCache();
+    private static final ScriptCache cache = new BasicScriptCache();
 
     @Override
     public ScriptEngine getScriptEngine() {
