@@ -59,7 +59,7 @@
     <spotless-maven-plugin.version>3.2.1</spotless-maven-plugin.version>
     <templating-maven-plugin.version>3.1.0</templating-maven-plugin.version>
     <maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
-    <surefire-plugin.version>3.5.2</surefire-plugin.version>
+    <surefire-plugin.version>3.5.5</surefire-plugin.version>
     <failsafe-plugin.version>${surefire-plugin.version}</failsafe-plugin.version>
     <maven-invoker-plugin.version>3.9.1</maven-invoker-plugin.version>
     <maven-failsafe-plugin.version>3.5.5</maven-failsafe-plugin.version>
