@@ -68,7 +68,7 @@
     <junit.version>5.14.3</junit.version>
 
     <!-- runtime versions -->
-    <chicory.version>1.6.1</chicory.version>
+    <chicory.version>1.7.0</chicory.version>
     <jackson.version>2.21.1</jackson.version>
     <javaparser.version>3.28.0</javaparser.version>
   </properties>
