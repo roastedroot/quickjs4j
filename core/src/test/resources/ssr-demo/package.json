@@ -1,0 +1,20 @@
+{
+    "scripts": {
+        "build": "esbuild --charset=utf8 index.jsx --bundle --format=esm --target=es2020 --define:process.env.NODE_ENV='\"production\"' --outfile=dist/out.js",
+        "clean": "rimraf dist node_modules"
+    },
+    "dependencies": {
+        "@babel/standalone": "^7.28.0",
+        "message-port-polyfill": "^0.2.0",
+        "react": "^19.1.0",
+        "react-dom": "^19.1.0",
+        "string-to-react-component": "^4.0.1",
+        "tslib": "^2.8.1"
+    },
+    "devDependencies": {
+        "esbuild": "0.25.2",
+        "esbuild-plugin-tsc": "^0.5.0",
+        "rimraf": "^6.0.1",
+        "typescript": "^5.8.3"
+    }
+}
