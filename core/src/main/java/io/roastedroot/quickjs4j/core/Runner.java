@@ -12,13 +12,15 @@ import java.util.concurrent.TimeoutException;
 
 public final class Runner implements AutoCloseable {
     private final int timeoutMs;
+    private final int compilationTimeoutMs;
     private final Engine engine;
     private final ExecutorService es;
 
-    private Runner(Engine engine, int timeout, ExecutorService es) {
+    private Runner(Engine engine, int timeout, int compilationTimeout, ExecutorService es) {
         this.engine = engine;
         this.es = es;
         this.timeoutMs = timeout;
+        this.compilationTimeoutMs = compilationTimeout;
     }
 
     public byte[] compile(String code) {
@@ -32,6 +34,7 @@ public final class Runner implements AutoCloseable {
                         engine.free(codePtr);
                     }
                 },
+                this.compilationTimeoutMs,
                 "Timeout while compiling");
     }
 
@@ -46,6 +49,7 @@ public final class Runner implements AutoCloseable {
                     }
                     return null;
                 },
+                this.timeoutMs,
                 "Timeout while executing");
     }
 
@@ -79,11 +83,11 @@ public final class Runner implements AutoCloseable {
         }
     }
 
-    private <T> T submitWithTimeout(Callable<T> task, String timeoutMessage) {
+    private <T> T submitWithTimeout(Callable<T> task, int timeout, String timeoutMessage) {
         Future<T> fut = es.submit(task);
         try {
-            if (this.timeoutMs != -1) {
-                return fut.get(this.timeoutMs, TimeUnit.MILLISECONDS);
+            if (timeout != -1) {
+                return fut.get(timeout, TimeUnit.MILLISECONDS);
             } else {
                 return fut.get();
             }
@@ -112,6 +116,7 @@ public final class Runner implements AutoCloseable {
     public static class Builder {
         private Engine engine;
         private int timeout = -1;
+        private int compilationTimeout = -1;
         private ExecutorService es;
 
         public Builder withExecutorService(ExecutorService es) {
@@ -129,6 +134,11 @@ public final class Runner implements AutoCloseable {
             return this;
         }
 
+        public Builder withCompilationTimeoutMs(int compilationTimeoutMs) {
+            this.compilationTimeout = compilationTimeoutMs;
+            return this;
+        }
+
         public Runner build() {
             if (this.engine == null) {
                 this.engine = Engine.builder().build();
@@ -136,7 +146,7 @@ public final class Runner implements AutoCloseable {
             if (this.es == null) {
                 this.es = Executors.newSingleThreadExecutor();
             }
-            return new Runner(this.engine, this.timeout, this.es);
+            return new Runner(this.engine, this.timeout, this.compilationTimeout, this.es);
         }
     }
 }

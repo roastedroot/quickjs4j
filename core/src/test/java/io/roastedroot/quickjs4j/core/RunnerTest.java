@@ -316,7 +316,7 @@ public class RunnerTest {
     @Test
     public void compileTimeout() throws Exception {
         var es = Executors.newSingleThreadExecutor();
-        var runner = Runner.builder().withTimeoutMs(500).withExecutorService(es).build();
+        var runner = Runner.builder().withCompilationTimeoutMs(500).withExecutorService(es).build();
 
         var sb = new StringBuilder();
         for (int i = 0; i < 200_000; i++) {
