@@ -350,4 +350,30 @@ public class RunnerTest {
             runner.compileAndExec("console.log('something something');");
         }
     }
+
+    @Test
+    public void boundedStdoutStopsExecution() throws Exception {
+        var boundedStdout = new BoundedByteArrayOutputStream(1024);
+        var es = Executors.newSingleThreadExecutor();
+        var engine = Engine.builder().withStdout(boundedStdout).build();
+        var runner = Runner.builder().withEngine(engine).withExecutorService(es).build();
+
+        // No timeout — the bounded stream should cause the error
+        var ex =
+                assertThrows(
+                        RuntimeException.class,
+                        () ->
+                                runner.compileAndExec(
+                                        "while(true) { console.log('x'.repeat(100)); }"));
+
+        assertTrue(
+                ex.getMessage().contains("exceeded limit"),
+                "Expected stream limit error, got: " + ex.getMessage());
+
+        // The executor thread should be free after the stream error
+        var probe = es.submit(() -> "ok");
+        assertEquals("ok", probe.get(5, java.util.concurrent.TimeUnit.SECONDS));
+
+        runner.close();
+    }
 }
