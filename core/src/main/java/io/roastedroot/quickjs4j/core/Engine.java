@@ -31,8 +31,8 @@ public final class Engine implements AutoCloseable {
     private static final int ALIGNMENT = 1;
     public static final ObjectMapper DEFAULT_OBJECT_MAPPER = new ObjectMapper();
 
-    private final ByteArrayOutputStream stdout = new ByteArrayOutputStream();
-    private final ByteArrayOutputStream stderr = new ByteArrayOutputStream();
+    private final ByteArrayOutputStream stdout;
+    private final ByteArrayOutputStream stderr;
     private final WasiOptions wasiOpts;
 
     private final WasiPreview1 wasi;
@@ -66,10 +66,14 @@ public final class Engine implements AutoCloseable {
             ObjectMapper mapper,
             Function<MemoryLimits, Memory> memoryFactory,
             ScriptCache cache,
-            Logger logger) {
+            Logger logger,
+            ByteArrayOutputStream stdout,
+            ByteArrayOutputStream stderr) {
         this.mapper = mapper;
         this.builtins = builtins;
         this.cache = cache;
+        this.stdout = stdout;
+        this.stderr = stderr;
 
         // builtins to make invoke dynamic javascript functions
         builtins.put(
@@ -454,7 +458,7 @@ public final class Engine implements AutoCloseable {
         try {
             stderr.flush();
         } catch (IOException ex) {
-            throw new RuntimeException("Failed to flush stdout");
+            throw new RuntimeException("Failed to flush stderr");
         }
 
         return stderr.toString(UTF_8);
@@ -533,6 +537,8 @@ public final class Engine implements AutoCloseable {
         private Function<MemoryLimits, Memory> memoryFactory;
         private ScriptCache cache;
         private Logger logger;
+        private ByteArrayOutputStream stdout;
+        private ByteArrayOutputStream stderr;
 
         private Builder() {}
 
@@ -566,6 +572,16 @@ public final class Engine implements AutoCloseable {
             return this;
         }
 
+        public Builder withStdout(ByteArrayOutputStream stdout) {
+            this.stdout = stdout;
+            return this;
+        }
+
+        public Builder withStderr(ByteArrayOutputStream stderr) {
+            this.stderr = stderr;
+            return this;
+        }
+
         public Engine build() {
             if (mapper == null) {
                 mapper = DEFAULT_OBJECT_MAPPER;
@@ -589,7 +605,21 @@ public final class Engine implements AutoCloseable {
             if (logger == null) {
                 logger = new SystemLogger();
             }
-            return new Engine(finalBuiltins, finalInvokables, mapper, memoryFactory, cache, logger);
+            if (stdout == null) {
+                stdout = new ByteArrayOutputStream();
+            }
+            if (stderr == null) {
+                stderr = new ByteArrayOutputStream();
+            }
+            return new Engine(
+                    finalBuiltins,
+                    finalInvokables,
+                    mapper,
+                    memoryFactory,
+                    cache,
+                    logger,
+                    stdout,
+                    stderr);
         }
     }
 }
