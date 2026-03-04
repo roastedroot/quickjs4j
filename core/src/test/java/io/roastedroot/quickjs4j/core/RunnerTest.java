@@ -292,41 +292,51 @@ public class RunnerTest {
     }
 
     @Test
-    public void withTimeout() {
-        // Arrange
-        var runner = Runner.builder().withTimeoutMs(500).build();
+    public void withTimeout() throws Exception {
+        var es = Executors.newSingleThreadExecutor();
+        var runner = Runner.builder().withTimeoutMs(500).withExecutorService(es).build();
 
-        // Act
         var ex =
                 assertThrows(
                         RuntimeException.class, () -> runner.compileAndExec("while (true) { };"));
 
-        // Assert
         assertTrue(ex.getCause() instanceof TimeoutException);
         assertTrue(
                 ex.getMessage().contains("Timeout while executing"),
                 "Expected execution timeout, got: " + ex.getMessage());
 
+        // cancel(true) interrupts the WASM execution on timeout, so the thread
+        // should be free to accept new work rather than stuck in the infinite loop
+        var probe = es.submit(() -> "ok");
+        assertEquals("ok", probe.get(5, java.util.concurrent.TimeUnit.SECONDS));
+
         runner.close();
     }
 
     @Test
-    public void compileTimeout() {
-        try (var runner = Runner.builder().withTimeoutMs(500).build()) {
+    public void compileTimeout() throws Exception {
+        var es = Executors.newSingleThreadExecutor();
+        var runner = Runner.builder().withTimeoutMs(500).withExecutorService(es).build();
 
-            var sb = new StringBuilder();
-            for (int i = 0; i < 200_000; i++) {
-                sb.append("var v").append(i).append("=").append(i).append(";");
-            }
-            var script = sb.toString();
-
-            var ex = assertThrows(RuntimeException.class, () -> runner.compile(script));
-
-            assertTrue(ex.getCause() instanceof TimeoutException);
-            assertTrue(
-                    ex.getMessage().contains("Timeout while compiling"),
-                    "Expected compilation timeout, got: " + ex.getMessage());
+        var sb = new StringBuilder();
+        for (int i = 0; i < 200_000; i++) {
+            sb.append("var v").append(i).append("=").append(i).append(";");
         }
+        var script = sb.toString();
+
+        var ex = assertThrows(RuntimeException.class, () -> runner.compile(script));
+
+        assertTrue(ex.getCause() instanceof TimeoutException);
+        assertTrue(
+                ex.getMessage().contains("Timeout while compiling"),
+                "Expected compilation timeout, got: " + ex.getMessage());
+
+        // cancel(true) interrupts the compilation on timeout, so the thread
+        // should be free to accept new work rather than stuck compiling
+        var probe = es.submit(() -> "ok");
+        assertEquals("ok", probe.get(5, java.util.concurrent.TimeUnit.SECONDS));
+
+        runner.close();
     }
 
     @Test
