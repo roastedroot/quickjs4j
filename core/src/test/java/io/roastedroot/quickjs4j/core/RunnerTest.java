@@ -303,8 +303,30 @@ public class RunnerTest {
 
         // Assert
         assertTrue(ex.getCause() instanceof TimeoutException);
+        assertTrue(
+                ex.getMessage().contains("Timeout while executing"),
+                "Expected execution timeout, got: " + ex.getMessage());
 
         runner.close();
+    }
+
+    @Test
+    public void compileTimeout() {
+        try (var runner = Runner.builder().withTimeoutMs(500).build()) {
+
+            var sb = new StringBuilder();
+            for (int i = 0; i < 200_000; i++) {
+                sb.append("var v").append(i).append("=").append(i).append(";");
+            }
+            var script = sb.toString();
+
+            var ex = assertThrows(RuntimeException.class, () -> runner.compile(script));
+
+            assertTrue(ex.getCause() instanceof TimeoutException);
+            assertTrue(
+                    ex.getMessage().contains("Timeout while compiling"),
+                    "Expected compilation timeout, got: " + ex.getMessage());
+        }
     }
 
     @Test
