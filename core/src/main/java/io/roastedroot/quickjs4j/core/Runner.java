@@ -2,60 +2,55 @@ package io.roastedroot.quickjs4j.core;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 public final class Runner implements AutoCloseable {
     private final int timeoutMs;
+    private final int compilationTimeoutMs;
     private final Engine engine;
     private final ExecutorService es;
 
-    private Runner(Engine engine, int timeout, ExecutorService es) {
+    private Runner(Engine engine, int timeout, int compilationTimeout, ExecutorService es) {
         this.engine = engine;
         this.es = es;
         this.timeoutMs = timeout;
+        this.compilationTimeoutMs = compilationTimeout;
     }
 
     public byte[] compile(String code) {
-        byte[] codeBytes = code.getBytes(StandardCharsets.UTF_8);
-        int codePtr = engine.compile(codeBytes);
-        var value = engine.readCompiled(codePtr);
-        engine.free(codePtr);
-        return value;
+        return submitWithTimeout(
+                () -> {
+                    byte[] codeBytes = code.getBytes(StandardCharsets.UTF_8);
+                    int codePtr = engine.compile(codeBytes);
+                    try {
+                        return engine.readCompiled(codePtr);
+                    } finally {
+                        engine.free(codePtr);
+                    }
+                },
+                this.compilationTimeoutMs,
+                "Timeout while compiling");
     }
 
     public void exec(byte[] jsBytecode) {
-        int codePtr = engine.writeCompiled(jsBytecode);
-        try {
-            var fut = es.submit(() -> this.engine.exec(codePtr));
-
-            if (this.timeoutMs != -1) {
-                fut.get(this.timeoutMs, TimeUnit.MILLISECONDS);
-            } else {
-                fut.get();
-            }
-        } catch (InterruptedException e) {
-            throw new RuntimeException("Thread interrupted", e);
-        } catch (ExecutionException e) {
-            // in this case the ExecutionException wraps the underlying Exception
-            if (e.getCause() != null) {
-                if (e.getCause() instanceof RuntimeException) {
-                    throw (RuntimeException) e.getCause();
-                } else {
-                    throw new RuntimeException(e.getCause());
-                }
-            } else {
-                // fallback
-                throw new RuntimeException(e);
-            }
-        } catch (TimeoutException e) {
-            throw new RuntimeException("Timeout while executing", e);
-        } finally {
-            engine.free(codePtr);
-        }
+        submitWithTimeout(
+                () -> {
+                    int codePtr = engine.writeCompiled(jsBytecode);
+                    try {
+                        this.engine.exec(codePtr);
+                    } finally {
+                        engine.free(codePtr);
+                    }
+                    return null;
+                },
+                this.timeoutMs,
+                "Timeout while executing");
     }
 
     public void compileAndExec(String code) {
@@ -79,10 +74,38 @@ public final class Runner implements AutoCloseable {
     @Override
     public void close() {
         if (es != null) {
-            es.shutdown();
+            // shutdownNow interrupts running tasks, which matters when no timeout
+            // is configured and close() is called while a task is still executing
+            es.shutdownNow();
         }
         if (engine != null) {
             engine.close();
+        }
+    }
+
+    private <T> T submitWithTimeout(Callable<T> task, int timeout, String timeoutMessage) {
+        Future<T> fut = es.submit(task);
+        try {
+            if (timeout != -1) {
+                return fut.get(timeout, TimeUnit.MILLISECONDS);
+            } else {
+                return fut.get();
+            }
+        } catch (TimeoutException e) {
+            fut.cancel(true);
+            throw new RuntimeException(timeoutMessage, e);
+        } catch (InterruptedException e) {
+            throw new RuntimeException("Thread interrupted", e);
+        } catch (ExecutionException e) {
+            if (e.getCause() != null) {
+                if (e.getCause() instanceof RuntimeException) {
+                    throw (RuntimeException) e.getCause();
+                } else {
+                    throw new RuntimeException(e.getCause());
+                }
+            } else {
+                throw new RuntimeException(e);
+            }
         }
     }
 
@@ -93,6 +116,7 @@ public final class Runner implements AutoCloseable {
     public static class Builder {
         private Engine engine;
         private int timeout = -1;
+        private int compilationTimeout = -1;
         private ExecutorService es;
 
         public Builder withExecutorService(ExecutorService es) {
@@ -110,6 +134,11 @@ public final class Runner implements AutoCloseable {
             return this;
         }
 
+        public Builder withCompilationTimeoutMs(int compilationTimeoutMs) {
+            this.compilationTimeout = compilationTimeoutMs;
+            return this;
+        }
+
         public Runner build() {
             if (this.engine == null) {
                 this.engine = Engine.builder().build();
@@ -117,7 +146,7 @@ public final class Runner implements AutoCloseable {
             if (this.es == null) {
                 this.es = Executors.newSingleThreadExecutor();
             }
-            return new Runner(this.engine, this.timeout, this.es);
+            return new Runner(this.engine, this.timeout, this.compilationTimeout, this.es);
         }
     }
 }
