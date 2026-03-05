@@ -30,6 +30,7 @@ import java.util.function.Function;
 public final class Engine implements AutoCloseable {
     private static final int ALIGNMENT = 1;
     private static final byte[] SEMICOLON_NL = ";\n".getBytes(UTF_8);
+    private static final byte[] NULL_BYTES = "null".getBytes(UTF_8);
     public static final ObjectMapper DEFAULT_OBJECT_MAPPER = new ObjectMapper();
 
     private final ByteArrayOutputStream stdout;
@@ -274,11 +275,10 @@ public final class Engine implements AutoCloseable {
                 }
             }
 
-            var returnStr =
+            var returnBytes =
                     (returnType == Void.class)
-                            ? "null"
-                            : mapper.writerFor(returnType).writeValueAsString(res);
-            var returnBytes = returnStr.getBytes(UTF_8);
+                            ? NULL_BYTES
+                            : mapper.writerFor(returnType).writeValueAsBytes(res);
 
             var returnPtr =
                     exports.canonicalAbiRealloc(
