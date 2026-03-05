@@ -60,7 +60,10 @@ public final class Runner implements AutoCloseable {
 
     public Object invokeGuestFunction(
             String moduleName, String name, List<Object> args, String libraryCode) {
-        return engine.invokeGuestFunction(moduleName, name, args, libraryCode);
+        return submitWithTimeout(
+                () -> engine.invokeGuestFunction(moduleName, name, args, libraryCode),
+                this.timeoutMs,
+                "Timeout while invoking guest function");
     }
 
     public String stdout() {
@@ -98,15 +101,15 @@ public final class Runner implements AutoCloseable {
             throw new RuntimeException("Thread interrupted", e);
         } catch (ExecutionException e) {
             if (e.getCause() != null) {
-                if (e.getCause() instanceof RuntimeException) {
-                    throw (RuntimeException) e.getCause();
-                } else {
-                    throw new RuntimeException(e.getCause());
-                }
-            } else {
-                throw new RuntimeException(e);
+                sneakyThrow(e.getCause());
             }
+            throw new RuntimeException(e);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <E extends Throwable> void sneakyThrow(Throwable e) throws E {
+        throw (E) e;
     }
 
     public static Builder builder() {
