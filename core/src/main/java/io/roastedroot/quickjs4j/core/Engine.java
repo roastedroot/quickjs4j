@@ -29,6 +29,7 @@ import java.util.function.Function;
 @WasmModuleInterface(WasmResource.absoluteFile)
 public final class Engine implements AutoCloseable {
     private static final int ALIGNMENT = 1;
+    private static final byte[] SEMICOLON_NL = ";\n".getBytes(UTF_8);
     public static final ObjectMapper DEFAULT_OBJECT_MAPPER = new ObjectMapper();
 
     private final ByteArrayOutputStream stdout;
@@ -120,11 +121,16 @@ public final class Engine implements AutoCloseable {
 
     public Object invokeGuestFunction(
             String moduleName, String name, List<Object> args, String libraryCode) {
+        return invokeGuestFunction(moduleName, name, args, libraryCode.getBytes(UTF_8));
+    }
+
+    public Object invokeGuestFunction(
+            String moduleName, String name, List<Object> args, byte[] libraryCode) {
         return invokePrecompiledGuestFunction(
                 moduleName, name, args, compilePortableGuestFunction(libraryCode));
     }
 
-    public String invokeFunction() {
+    public byte[] invokeFunction() {
         var funInvoke =
                 "globalThis[quickjs4j_engine.module_name()][quickjs4j_engine.function_name()](...JSON.parse(quickjs4j_engine.args()))";
         Function<String, String> setResult =
@@ -135,11 +141,12 @@ public final class Engine implements AutoCloseable {
                                 + value
                                 + "]))";
 
-        return "Promise.resolve("
-                + funInvoke
-                + ").then((value) => { "
-                + setResult.apply("value")
-                + " }, (err) => { throw err; })";
+        return ("Promise.resolve("
+                        + funInvoke
+                        + ").then((value) => { "
+                        + setResult.apply("value")
+                        + " }, (err) => { throw err; })")
+                .getBytes(UTF_8);
     }
 
     // Plan:
@@ -147,23 +154,23 @@ public final class Engine implements AutoCloseable {
     // protocol
     // { moduleName: "..", functionName: "..", args: "stringified args" }
     public byte[] compilePortableGuestFunction(String libraryCode) {
+        return compilePortableGuestFunction(libraryCode.getBytes(UTF_8));
+    }
+
+    public byte[] compilePortableGuestFunction(byte[] libraryCode) {
         int codePtr = 0;
         try {
-            var invokeFunction = invokeFunction();
+            var buf = new ByteArrayOutputStream();
+            buf.writeBytes(jsPrelude());
+            buf.write('\n');
+            buf.writeBytes(libraryCode);
+            buf.write('\n');
+            buf.writeBytes(jsSuffix());
+            buf.write('\n');
+            buf.writeBytes(invokeFunction());
+            buf.writeBytes(SEMICOLON_NL);
 
-            String jsCode =
-                    new String(jsPrelude(), UTF_8)
-                            + "\n"
-                            + libraryCode
-                            + "\n"
-                            + new String(jsSuffix(), UTF_8)
-                            + "\n"
-                            + invokeFunction
-                            + ";\n";
-
-            // System.out.println(jsCode);
-
-            codePtr = compileRaw(jsCode.getBytes(UTF_8));
+            codePtr = compileRaw(buf.toByteArray());
             return readCompiled(codePtr);
         } finally {
             if (codePtr != 0) {
@@ -271,7 +278,7 @@ public final class Engine implements AutoCloseable {
                     (returnType == Void.class)
                             ? "null"
                             : mapper.writerFor(returnType).writeValueAsString(res);
-            var returnBytes = returnStr.getBytes();
+            var returnBytes = returnStr.getBytes(UTF_8);
 
             var returnPtr =
                     exports.canonicalAbiRealloc(
@@ -332,7 +339,7 @@ public final class Engine implements AutoCloseable {
                                 + "\", JSON.stringify(args))) };\n");
             }
         }
-        return preludeBuilder.toString().getBytes();
+        return preludeBuilder.toString().getBytes(UTF_8);
     }
 
     // This function dynamically generates the js handlers for Invokables
@@ -352,7 +359,7 @@ public final class Engine implements AutoCloseable {
                                 + ";\n");
             }
         }
-        return suffixBuilder.toString().getBytes();
+        return suffixBuilder.toString().getBytes(UTF_8);
     }
 
     public int compile(String js) {

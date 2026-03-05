@@ -24,10 +24,13 @@ public final class Runner implements AutoCloseable {
     }
 
     public byte[] compile(String code) {
+        return compile(code.getBytes(StandardCharsets.UTF_8));
+    }
+
+    public byte[] compile(byte[] code) {
         return submitWithTimeout(
                 () -> {
-                    byte[] codeBytes = code.getBytes(StandardCharsets.UTF_8);
-                    int codePtr = engine.compile(codeBytes);
+                    int codePtr = engine.compile(code);
                     try {
                         return engine.readCompiled(codePtr);
                     } finally {
