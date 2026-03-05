@@ -1,8 +1,8 @@
 package io.roastedroot.quickjs4j.core;
 
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Base64;
 import java.util.HashMap;
 
 public class BasicScriptCache implements ScriptCache, AutoCloseable {
@@ -24,20 +24,19 @@ public class BasicScriptCache implements ScriptCache, AutoCloseable {
         }
     }
 
-    private String cacheKey(byte[] code) {
-        return Base64.getEncoder().encodeToString(messageDigest.digest(code));
-    }
-
     public boolean exists(byte[] code) {
-        return cache.containsKey(cacheKey(code));
+        var key = messageDigest.digest(code);
+        return cache.containsKey(new String(key, StandardCharsets.UTF_8));
     }
 
     public void set(byte[] code, byte[] compiled) {
-        cache.put(cacheKey(code), compiled);
+        var key = messageDigest.digest(code);
+        cache.put(new String(key, StandardCharsets.UTF_8), compiled);
     }
 
     public byte[] get(byte[] code) {
-        return cache.get(cacheKey(code));
+        var key = messageDigest.digest(code);
+        return cache.get(new String(key, StandardCharsets.UTF_8));
     }
 
     public void close() {
