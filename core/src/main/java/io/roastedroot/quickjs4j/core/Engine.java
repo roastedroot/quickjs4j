@@ -29,7 +29,7 @@ import java.util.function.Function;
 @WasmModuleInterface(WasmResource.absoluteFile)
 public final class Engine implements AutoCloseable {
     private static final int ALIGNMENT = 1;
-    private static final byte[] SEMICOLON_NL = ";\n".getBytes(UTF_8);
+
     private static final byte[] NULL_BYTES = "null".getBytes(UTF_8);
     public static final ObjectMapper DEFAULT_OBJECT_MAPPER = new ObjectMapper();
 
@@ -131,7 +131,7 @@ public final class Engine implements AutoCloseable {
                 moduleName, name, args, compilePortableGuestFunction(libraryCode));
     }
 
-    public byte[] invokeFunction() {
+    private String invokeFunction() {
         var funInvoke =
                 "globalThis[quickjs4j_engine.module_name()][quickjs4j_engine.function_name()](...JSON.parse(quickjs4j_engine.args()))";
         Function<String, String> setResult =
@@ -142,36 +142,35 @@ public final class Engine implements AutoCloseable {
                                 + value
                                 + "]))";
 
-        return ("Promise.resolve("
-                        + funInvoke
-                        + ").then((value) => { "
-                        + setResult.apply("value")
-                        + " }, (err) => { throw err; })")
-                .getBytes(UTF_8);
+        return "Promise.resolve("
+                + funInvoke
+                + ").then((value) => { "
+                + setResult.apply("value")
+                + " }, (err) => { throw err; })";
     }
 
     // Plan:
     // we compile a static version of the module and we invoke it parametrically using a basic
     // protocol
     // { moduleName: "..", functionName: "..", args: "stringified args" }
-    public byte[] compilePortableGuestFunction(String libraryCode) {
-        return compilePortableGuestFunction(libraryCode.getBytes(UTF_8));
+    public byte[] compilePortableGuestFunction(byte[] libraryCode) {
+        return compilePortableGuestFunction(new String(libraryCode, UTF_8));
     }
 
-    public byte[] compilePortableGuestFunction(byte[] libraryCode) {
+    public byte[] compilePortableGuestFunction(String libraryCode) {
         int codePtr = 0;
         try {
-            var buf = new ByteArrayOutputStream();
-            buf.writeBytes(jsPrelude());
-            buf.write('\n');
-            buf.writeBytes(libraryCode);
-            buf.write('\n');
-            buf.writeBytes(jsSuffix());
-            buf.write('\n');
-            buf.writeBytes(invokeFunction());
-            buf.writeBytes(SEMICOLON_NL);
+            var buf = new StringBuilder();
+            buf.append(jsPrelude());
+            buf.append('\n');
+            buf.append(libraryCode);
+            buf.append('\n');
+            buf.append(jsSuffix());
+            buf.append('\n');
+            buf.append(invokeFunction());
+            buf.append(";\n");
 
-            codePtr = compileRaw(buf.toByteArray());
+            codePtr = compileRaw(buf.toString().getBytes(UTF_8));
             return readCompiled(codePtr);
         } finally {
             if (codePtr != 0) {
@@ -322,7 +321,7 @@ public final class Engine implements AutoCloseable {
                     this::invokeBuiltin);
 
     // This function dynamically generates the global functions defined by the Builtins
-    private byte[] jsPrelude() {
+    private String jsPrelude() {
         var preludeBuilder = new StringBuilder();
         for (Map.Entry<String, Builtins> builtin : builtins.entrySet()) {
             preludeBuilder.append("globalThis." + builtin.getKey() + " = {};\n");
@@ -339,11 +338,11 @@ public final class Engine implements AutoCloseable {
                                 + "\", JSON.stringify(args))) };\n");
             }
         }
-        return preludeBuilder.toString().getBytes(UTF_8);
+        return preludeBuilder.toString();
     }
 
     // This function dynamically generates the js handlers for Invokables
-    private byte[] jsSuffix() {
+    private String jsSuffix() {
         var suffixBuilder = new StringBuilder();
         for (Map.Entry<String, Invokables> invokable : invokables.entrySet()) {
             // The object is already defined by the set_result, just add the handlers
@@ -359,7 +358,7 @@ public final class Engine implements AutoCloseable {
                                 + ";\n");
             }
         }
-        return suffixBuilder.toString().getBytes(UTF_8);
+        return suffixBuilder.toString();
     }
 
     public int compile(String js) {
@@ -367,7 +366,7 @@ public final class Engine implements AutoCloseable {
     }
 
     public int compile(byte[] js) {
-        byte[] prelude = jsPrelude();
+        byte[] prelude = jsPrelude().getBytes(UTF_8);
         byte[] jsCode = new byte[prelude.length + js.length];
         System.arraycopy(prelude, 0, jsCode, 0, prelude.length);
         System.arraycopy(js, 0, jsCode, prelude.length, js.length);
