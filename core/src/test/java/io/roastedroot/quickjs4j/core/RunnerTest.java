@@ -340,6 +340,43 @@ public class RunnerTest {
     }
 
     @Test
+    public void invokeGuestFunctionTimeout() throws Exception {
+        var invokables =
+                Invokables.builder("from_js")
+                        .add(new GuestFunction("hang", List.of(), Integer.class))
+                        .build();
+
+        var libraryCode = "function hang() { while(true) {} return 1; };";
+
+        var es = Executors.newSingleThreadExecutor();
+        var jsEngine = Engine.builder().addInvokables(invokables).build();
+        var runner =
+                Runner.builder()
+                        .withEngine(jsEngine)
+                        .withTimeoutMs(500)
+                        .withExecutorService(es)
+                        .build();
+
+        var ex =
+                assertThrows(
+                        RuntimeException.class,
+                        () ->
+                                runner.invokeGuestFunction(
+                                        "from_js", "hang", List.of(), libraryCode));
+
+        assertTrue(ex.getCause() instanceof TimeoutException);
+        assertTrue(
+                ex.getMessage().contains("Timeout while invoking guest function"),
+                "Expected execution timeout, got: " + ex.getMessage());
+
+        // Verify the executor thread is free after timeout
+        var probe = es.submit(() -> "ok");
+        assertEquals("ok", probe.get(5, java.util.concurrent.TimeUnit.SECONDS));
+
+        runner.close();
+    }
+
+    @Test
     public void handleExceptionsThrownInJava() {
         var builtins =
                 Builtins.builder("from_java")

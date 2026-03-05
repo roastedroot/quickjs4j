@@ -60,7 +60,10 @@ public final class Runner implements AutoCloseable {
 
     public Object invokeGuestFunction(
             String moduleName, String name, List<Object> args, String libraryCode) {
-        return engine.invokeGuestFunction(moduleName, name, args, libraryCode);
+        return submitWithTimeout(
+                () -> engine.invokeGuestFunction(moduleName, name, args, libraryCode),
+                this.timeoutMs,
+                "Timeout while invoking guest function");
     }
 
     public String stdout() {
