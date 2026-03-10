@@ -90,13 +90,18 @@ public final class Runner implements AutoCloseable {
     }
 
     private <T> T submitWithTimeout(Callable<T> task, int timeout, String timeoutMessage) {
+        if (timeout == -1) {
+            try {
+                return task.call();
+            } catch (RuntimeException e) {
+                throw e;
+            } catch (Throwable e) {
+                sneakyThrow(e);
+            }
+        }
         Future<T> fut = es.submit(task);
         try {
-            if (timeout != -1) {
-                return fut.get(timeout, TimeUnit.MILLISECONDS);
-            } else {
-                return fut.get();
-            }
+            return fut.get(timeout, TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
             fut.cancel(true);
             throw new RuntimeException(timeoutMessage, e);
