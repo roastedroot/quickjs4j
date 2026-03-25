@@ -98,7 +98,6 @@
           <configuration>
             <parameters>true</parameters>
             <release>11</release>
-            <annotationProcessorPathsUseDepMgmt>true</annotationProcessorPathsUseDepMgmt>
           </configuration>
         </plugin>
         <plugin>
