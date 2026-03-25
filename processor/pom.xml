@@ -42,7 +42,6 @@
         <configuration>
           <parameters>true</parameters>
           <release>11</release>
-          <annotationProcessorPathsUseDepMgmt>true</annotationProcessorPathsUseDepMgmt>
           <compilerArgs>-proc:none</compilerArgs>
         </configuration>
       </plugin>
