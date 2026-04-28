@@ -278,7 +278,7 @@ public final class Engine implements AutoCloseable {
                             : mapper.writerFor(returnType).writeValueAsBytes(res);
 
             var returnPtr =
-                    exports.canonicalAbiRealloc(
+                    exports.cabiRealloc(
                             0, // original_ptr
                             0, // original_size
                             ALIGNMENT, // alignment
@@ -288,7 +288,7 @@ public final class Engine implements AutoCloseable {
 
             var LEN = 8;
             var widePtr =
-                    exports.canonicalAbiRealloc(
+                    exports.cabiRealloc(
                             0, // original_ptr
                             0, // original_size
                             ALIGNMENT, // alignment
@@ -380,7 +380,7 @@ public final class Engine implements AutoCloseable {
         byte[] jsCode = js;
 
         var ptr =
-                exports.canonicalAbiRealloc(
+                exports.cabiRealloc(
                         0, // original_ptr
                         0, // original_size
                         ALIGNMENT, // alignment
@@ -390,7 +390,7 @@ public final class Engine implements AutoCloseable {
         exports.memory().write(ptr, jsCode);
         try {
             var aggregatedCodePtr = exports.compileSrc(ptr, jsCode.length);
-            exports.canonicalAbiFree(
+            exports.abiFree(
                     ptr, // ptr
                     jsCode.length, // length
                     ALIGNMENT // alignement
@@ -426,7 +426,7 @@ public final class Engine implements AutoCloseable {
         var codeLength = exports.memory().readInt(codePtr + 4);
 
         try {
-            exports.invoke(
+            exports.eval(
                     ptr, // bytecode_ptr
                     codeLength, // bytecode_len
                     0, // fn_name_ptr
@@ -472,7 +472,7 @@ public final class Engine implements AutoCloseable {
         var ptr = exports.memory().readInt(codePtr);
         var codeLength = exports.memory().readInt(codePtr + 4);
 
-        exports.canonicalAbiFree(
+        exports.abiFree(
                 ptr, // ptr
                 codeLength, // length
                 ALIGNMENT // alignement
@@ -488,7 +488,7 @@ public final class Engine implements AutoCloseable {
 
     public int writeCompiled(byte[] jsBytecode) {
         var ptr =
-                exports.canonicalAbiRealloc(
+                exports.cabiRealloc(
                         0, // original_ptr
                         0, // original_size
                         ALIGNMENT, // alignment
@@ -496,7 +496,7 @@ public final class Engine implements AutoCloseable {
                         );
 
         var codePtr =
-                exports.canonicalAbiRealloc(
+                exports.cabiRealloc(
                         0, // original_ptr
                         0, // original_size
                         ALIGNMENT, // alignment
