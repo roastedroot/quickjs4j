@@ -290,6 +290,47 @@ public class EngineTest {
                         expectedUser.name, expectedUser.surname, expectedUser.age));
     }
 
+    @SuppressWarnings("unchecked")
+    @Test
+    public void hostRefArray() {
+        var received = new AtomicReference<>();
+        var builtins =
+                Builtins.builder("from_java")
+                        .add(
+                                new HostFunction(
+                                        "create",
+                                        List.of(Integer.class, Integer.class),
+                                        HostRef.class,
+                                        (args) -> {
+                                            var x = (Integer) args.get(0);
+                                            var y = (Integer) args.get(1);
+                                            return new Point(x, y);
+                                        }))
+                        .add(
+                                new HostFunction(
+                                        "check_refs",
+                                        List.of(HostRef.class),
+                                        Void.class,
+                                        (args) -> {
+                                            received.set(args.get(0));
+                                            return null;
+                                        }))
+                        .build();
+
+        var engine = Engine.builder().addBuiltins(builtins).build();
+
+        compileAndExec(
+                engine,
+                "const p1 = from_java.create(10, 20);\n"
+                        + "const p2 = from_java.create(30, 40);\n"
+                        + "from_java.check_refs([p1, p2]);\n");
+
+        var refs = (List<Object>) received.get();
+        assertEquals(2, refs.size());
+        assertEquals(new Point(10, 20), refs.get(0));
+        assertEquals(new Point(30, 40), refs.get(1));
+    }
+
     @Test
     public void useBundledJS() throws Exception {
         var myCow =

@@ -252,7 +252,15 @@ public final class Engine implements AutoCloseable {
                 }
 
                 if (clazz == HostRef.class) {
-                    argsList.add(javaRefs.get(value.intValue()));
+                    if (value.isArray()) {
+                        var refs = new ArrayList<>();
+                        for (JsonNode elem : value) {
+                            refs.add(javaRefs.get(elem.intValue()));
+                        }
+                        argsList.add(refs);
+                    } else {
+                        argsList.add(javaRefs.get(value.intValue()));
+                    }
                 } else {
                     argsList.add(mapper.treeToValue(value, clazz));
                 }

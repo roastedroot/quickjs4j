@@ -13,6 +13,7 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.ArrayCreationExpr;
 import com.github.javaparser.ast.expr.ArrayInitializerExpr;
 import com.github.javaparser.ast.expr.CastExpr;
+import com.github.javaparser.ast.expr.EnclosedExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
@@ -42,6 +43,8 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
+import javax.lang.model.type.ArrayType;
+import javax.lang.model.type.TypeKind;
 import javax.tools.StandardLocation;
 
 public final class BuiltinsProcessor extends Quickjs4jAbstractProcessor {
@@ -219,12 +222,37 @@ public final class BuiltinsProcessor extends Quickjs4jAbstractProcessor {
                     break;
                 default:
                     var typeLiteral = parameter.asType().toString();
-                    var type = parseType(parameter.asType().toString());
-                    arguments.add(new CastExpr(type, argExpr(paramTypes.size())));
+                    var argIndex = paramTypes.size();
                     if (annotatedWith(parameter, HostRefParam.class)) {
                         var javaRefType = "io.roastedroot.quickjs4j.core.HostRef";
                         paramTypes.add(new FieldAccessExpr(new NameExpr(javaRefType), "class"));
+                        if (parameter.asType().getKind() == TypeKind.ARRAY) {
+                            var componentType =
+                                    ((ArrayType) parameter.asType()).getComponentType().toString();
+                            var castToList =
+                                    new EnclosedExpr(
+                                            new CastExpr(
+                                                    parseType("java.util.List"),
+                                                    argExpr(argIndex)));
+                            var emptyArray =
+                                    new ArrayCreationExpr(
+                                            parseType(componentType),
+                                            NodeList.nodeList(
+                                                    new ArrayCreationLevel()
+                                                            .setDimension(
+                                                                    new IntegerLiteralExpr("0"))),
+                                            null);
+                            var toArrayCall =
+                                    new MethodCallExpr(
+                                            castToList, "toArray", NodeList.nodeList(emptyArray));
+                            arguments.add(new CastExpr(parseType(typeLiteral), toArrayCall));
+                        } else {
+                            var type = parseType(typeLiteral);
+                            arguments.add(new CastExpr(type, argExpr(argIndex)));
+                        }
                     } else {
+                        var type = parseType(typeLiteral);
+                        arguments.add(new CastExpr(type, argExpr(argIndex)));
                         paramTypes.add(new FieldAccessExpr(new NameExpr(typeLiteral), "class"));
                     }
             }
