@@ -1,5 +1,6 @@
 package chicory.test;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -50,6 +51,19 @@ class HelloJsTest {
         public void myRefCheck(@HostRefParam String value) {
             refInvoked = true;
             assertEquals("a pure java string", value);
+        }
+
+        @ReturnsHostRef
+        @HostFunction("my_java_ref_create")
+        public String createRef(String value) {
+            return value;
+        }
+
+        public String[] receivedRefs;
+
+        @HostFunction("my_java_ref_check_array")
+        public void myRefCheckArray(@HostRefParam String... values) {
+            receivedRefs = values;
         }
     }
 
@@ -111,6 +125,18 @@ class HelloJsTest {
 
         // assert
         assertTrue(helloJs.isRefInvoked());
+    }
+
+    @Test
+    public void useJavaRefArray() {
+        var helloJs = new JsTest();
+
+        helloJs.exec(
+                "var r1 = from_java.my_java_ref_create('hello');\n"
+                        + "var r2 = from_java.my_java_ref_create('world');\n"
+                        + "from_java.my_java_ref_check_array([r1, r2]);");
+
+        assertArrayEquals(new String[] {"hello", "world"}, helloJs.javaApi.receivedRefs);
     }
 
     @Test
