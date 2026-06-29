@@ -32,7 +32,7 @@ The threat model for QuickJs4J identifies critical vulnerabilities at the bounda
 | --------- | -------------- | ------------------------------------------------------------------------- | ----------------- |
 | asset-001 | Confidential   | The QuickJS `Engine` instance managing the Wasm runtime.                  | QuickJs4J Library |
 | asset-002 | Confidential   | The `Runner`, a high-level API for executing JS code with timeouts.       | QuickJs4J Library |
-| asset-003 | Confidential   | The Wasm runtime (Chicory) that executes the QuickJS binary.              | QuickJs4J Library |
+| asset-003 | Confidential   | The Wasm runtime (Endive) that executes the QuickJS binary.               | QuickJs4J Library |
 | asset-004 | Restricted     | The compiled QuickJS engine in WebAssembly format.                        | QuickJs4J Library |
 | asset-005 | Confidential   | Untrusted JavaScript code provided by the end-user/integrator.            | Integrator        |
 | asset-006 | Restricted     | The host Java application that integrates and uses the QuickJs4J library. | Integrator        |

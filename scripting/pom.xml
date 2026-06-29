@@ -63,9 +63,9 @@
         <configuration>
           <annotationProcessorPaths>
             <path>
-              <groupId>com.dylibso.chicory</groupId>
+              <groupId>run.endive</groupId>
               <artifactId>annotations-processor</artifactId>
-              <version>${chicory.version}</version>
+              <version>${endive.version}</version>
             </path>
           </annotationProcessorPaths>
         </configuration>
