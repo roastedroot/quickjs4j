@@ -2,18 +2,6 @@ package io.roastedroot.quickjs4j.core;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import com.dylibso.chicory.log.Logger;
-import com.dylibso.chicory.log.SystemLogger;
-import com.dylibso.chicory.runtime.ByteArrayMemory;
-import com.dylibso.chicory.runtime.HostFunction;
-import com.dylibso.chicory.runtime.ImportValues;
-import com.dylibso.chicory.runtime.Instance;
-import com.dylibso.chicory.runtime.Memory;
-import com.dylibso.chicory.runtime.TrapException;
-import com.dylibso.chicory.wasi.WasiOptions;
-import com.dylibso.chicory.wasi.WasiPreview1;
-import com.dylibso.chicory.wasm.types.MemoryLimits;
-import com.dylibso.chicory.wasm.types.ValueType;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -24,6 +12,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import run.endive.log.Logger;
+import run.endive.log.SystemLogger;
+import run.endive.runtime.ByteArrayMemory;
+import run.endive.runtime.HostFunction;
+import run.endive.runtime.ImportValues;
+import run.endive.runtime.Instance;
+import run.endive.runtime.Memory;
+import run.endive.runtime.TrapException;
+import run.endive.wasi.WasiOptions;
+import run.endive.wasi.WasiPreview1;
+import run.endive.wasm.types.MemoryLimits;
+import run.endive.wasm.types.ValueType;
 
 public final class Engine implements AutoCloseable {
     private static final int ALIGNMENT = 1;
@@ -314,7 +314,7 @@ public final class Engine implements AutoCloseable {
 
     private final HostFunction invokeFn =
             new HostFunction(
-                    "chicory",
+                    "endive",
                     "invoke",
                     List.of(
                             ValueType.I32,

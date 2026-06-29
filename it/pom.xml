@@ -32,7 +32,7 @@
         <configuration>
           <systemPropertyVariables>
             <itDir>${project.basedir}</itDir>
-            <chicoryVersion>${project.version}</chicoryVersion>
+            <endiveVersion>${project.version}</endiveVersion>
           </systemPropertyVariables>
         </configuration>
         <executions>

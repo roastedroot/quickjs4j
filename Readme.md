@@ -19,7 +19,7 @@ Whether you're embedding scripting capabilities or isolating untrusted code, Qui
 There are a few steps to achieve the result:
 
 - compile QuickJS to [WebAssembly](https://webassembly.org/)
-- translate the QuickJS  payload to pure Java bytecode using [Chicory Compiler](https://chicory.dev/docs/usage/build-time-compiler)
+- translate the QuickJS  payload to pure Java bytecode using [Endive Compiler](https://endive.run/docs/usage/build-time-compiler)
 - run QuickJS directly from Java without using JNI
 - ship an extremely small and self contained `jar` that can run wherever the JVM can go!
 
@@ -257,4 +257,4 @@ This project stands on the shoulders of giants:
 
 * [QuickJS](https://bellard.org/quickjs/) – a small, embeddable JavaScript engine
 * [Javy](https://github.com/bytecodealliance/javy) – a toolchain for compiling JavaScript to WebAssembly
-* [Chicory](https://chicory.dev/) – a native JVM WebAssembly runtime
+* [Endive](https://endive.run/) – a native JVM WebAssembly runtime

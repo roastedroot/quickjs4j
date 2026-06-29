@@ -2,10 +2,10 @@ extern crate javy_plugin_api;
 use javy_plugin_api::{import_namespace, javy::quickjs::prelude::Func, Config};
 use std::alloc::{alloc, dealloc, Layout};
 
-import_namespace!("chicory_plugin");
+import_namespace!("endive_plugin");
 
-mod chicory_imports {
-    #[link(wasm_import_module = "chicory")]
+mod endive_imports {
+    #[link(wasm_import_module = "endive")]
     extern "C" {
         pub fn invoke(
             module_str_ptr: *const u8,
@@ -31,7 +31,7 @@ fn invoke_exec(module_str: String, name_str: String, args_str: String) -> String
     let args_bytes: &[u8] = args_str.as_bytes();
 
     let return_str = unsafe {
-        let wide_ptr = chicory_imports::invoke(
+        let wide_ptr = endive_imports::invoke(
             module_bytes.as_ptr(),
             module_bytes.len(),
             name_bytes.as_ptr(),

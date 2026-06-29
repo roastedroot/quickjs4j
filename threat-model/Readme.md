@@ -3,7 +3,7 @@
 In this folder you can find the results produced by an automated threat-modelling tool (`rapidinsights`).
 These outputs have been reviewed and processed by humans, and should be used to derive clear, actionable security improvements.
 
-Please treat these results as guidance for identifying risks, prioritizing mitigations, and strengthening the overall security of the system when integrating Chicory in a project.
+Please treat these results as guidance for identifying risks, prioritizing mitigations, and strengthening the overall security of the system when integrating Endive in a project.
 
 ## Generation
 

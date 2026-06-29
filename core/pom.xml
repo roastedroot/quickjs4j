@@ -14,22 +14,22 @@
   <name>QuickJs4J</name>
 
   <dependencies>
-    <dependency>
-      <groupId>com.dylibso.chicory</groupId>
-      <artifactId>runtime</artifactId>
-      <version>${chicory.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>com.dylibso.chicory</groupId>
-      <artifactId>wasi</artifactId>
-      <version>${chicory.version}</version>
-    </dependency>
 
     <!-- Jackson used for function arg/return ser/deser -->
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
       <version>${jackson.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>run.endive</groupId>
+      <artifactId>runtime</artifactId>
+      <version>${endive.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>run.endive</groupId>
+      <artifactId>wasi</artifactId>
+      <version>${endive.version}</version>
     </dependency>
 
     <!-- ============= Testing ============= -->
@@ -55,24 +55,6 @@
 
   <build>
     <plugins>
-      <plugin>
-        <groupId>com.dylibso.chicory</groupId>
-        <artifactId>chicory-compiler-maven-plugin</artifactId>
-        <version>${chicory.version}</version>
-        <executions>
-          <execution>
-            <id>javy-plugin</id>
-            <goals>
-              <goal>compile</goal>
-            </goals>
-            <configuration>
-              <name>io.roastedroot.quickjs4j.core.JavyPluginModule</name>
-              <wasmFile>../javy_quickjs4j_plugin.wasm</wasmFile>
-              <moduleInterface>io.roastedroot.quickjs4j.core.Engine</moduleInterface>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
 
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -97,6 +79,24 @@
             <goals>
               <goal>filter-sources</goal>
             </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>run.endive</groupId>
+        <artifactId>endive-compiler-maven-plugin</artifactId>
+        <version>${endive.version}</version>
+        <executions>
+          <execution>
+            <id>javy-plugin</id>
+            <goals>
+              <goal>compile</goal>
+            </goals>
+            <configuration>
+              <name>io.roastedroot.quickjs4j.core.JavyPluginModule</name>
+              <wasmFile>../javy_quickjs4j_plugin.wasm</wasmFile>
+              <moduleInterface>io.roastedroot.quickjs4j.core.Engine</moduleInterface>
+            </configuration>
           </execution>
         </executions>
       </plugin>
