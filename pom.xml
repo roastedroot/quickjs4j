@@ -68,7 +68,7 @@
     <junit.version>5.14.4</junit.version>
 
     <!-- runtime versions -->
-    <endive.version>1.0.0</endive.version>
+    <endive.version>1.0.1</endive.version>
     <jackson.version>2.22.0</jackson.version>
     <javaparser.version>3.28.2</javaparser.version>
   </properties>
