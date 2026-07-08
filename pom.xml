@@ -69,7 +69,7 @@
 
     <!-- runtime versions -->
     <endive.version>1.0.1</endive.version>
-    <jackson.version>2.22.0</jackson.version>
+    <jackson.version>2.22.1</jackson.version>
     <javaparser.version>3.28.2</javaparser.version>
   </properties>
 
