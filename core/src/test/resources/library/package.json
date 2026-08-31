@@ -8,6 +8,6 @@
         "rimraf": "^6.0.1"
     },
     "dependencies": {
-        "yaml": "^2.7.1"
+        "yaml": "^2.8.3"
     }
 }
