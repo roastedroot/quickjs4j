@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.ServiceLoader;
 import java.util.function.Function;
 import run.endive.log.Logger;
 import run.endive.log.SystemLogger;
@@ -100,9 +101,7 @@ public final class Engine implements AutoCloseable {
                         });
         this.invokables = invokables;
         instance =
-                Instance.builder(JavyPluginModule.load())
-                        .withMemoryFactory(memoryFactory)
-                        .withMachineFactory(JavyPluginModule::create)
+                instanceBuilder(memoryFactory)
                         .withImportValues(
                                 ImportValues.builder()
                                         .addFunction(wasi.toHostFunctions())
@@ -111,6 +110,23 @@ public final class Engine implements AutoCloseable {
                         .build();
         exports = new Engine_ModuleExports(instance);
         exports.initializeRuntime();
+    }
+
+    // a custom memory factory can only be honored by the default instance
+    private static Instance.Builder instanceBuilder(Function<MemoryLimits, Memory> memoryFactory) {
+        if (memoryFactory == null) {
+            for (var provider :
+                    ServiceLoader.load(
+                            InstanceBuilderProvider.class, Engine.class.getClassLoader())) {
+                var builder = provider.builder();
+                if (builder.isPresent()) {
+                    return builder.get();
+                }
+            }
+        }
+        return Instance.builder(JavyPluginModule.load())
+                .withMemoryFactory(memoryFactory == null ? ByteArrayMemory::new : memoryFactory)
+                .withMachineFactory(JavyPluginModule::create);
     }
 
     private String readJavyString(int ptr, int len) {
@@ -597,9 +613,6 @@ public final class Engine implements AutoCloseable {
         public Engine build() {
             if (mapper == null) {
                 mapper = DEFAULT_OBJECT_MAPPER;
-            }
-            if (memoryFactory == null) {
-                memoryFactory = ByteArrayMemory::new;
             }
             Map<String, Builtins> finalBuiltins = new HashMap<>();
             // TODO: any validation to be done here?

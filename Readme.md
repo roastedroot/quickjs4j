@@ -211,6 +211,19 @@ engine.eval("function add(a, b) { return a + b; }");
 
 See the full [JSR-223 scripting documentation](scripting/README.md) for details on bindings, `Compilable`, `Invocable` (`invokeFunction`, `invokeMethod`, `getInterface`), output redirection, and more.
 
+## Native Execution (Experimental)
+
+By default QuickJs4J runs on JVM bytecode. To run it on native code instead, compiled with the experimental [Endive Redline](https://endive.run/docs/experimental/redline) compiler, add:
+
+```xml
+<dependency>
+    <groupId>io.roastedroot</groupId>
+    <artifactId>quickjs4j-redline-experimental</artifactId>
+</dependency>
+```
+
+No code changes are needed. Native code is used on Linux, macOS and Windows (x86_64 and aarch64), with Panama FFM on Java 25+ and jffi on older JDKs. On other platforms, or when a custom memory factory is set with `Engine.builder().withMemoryFactory(...)`, the default bytecode is used.
+
 ## Building a JS/TS Library
 
 To build your JavaScript/TypeScript library, refer to [this example](it/src/it/apicurio-example/src/main/resources/library).

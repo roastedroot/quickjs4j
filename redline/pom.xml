@@ -9,30 +9,38 @@
     <relativePath>../pom.xml</relativePath>
   </parent>
 
-  <artifactId>quickjs4j</artifactId>
+  <artifactId>quickjs4j-redline-experimental</artifactId>
   <packaging>jar</packaging>
-  <name>QuickJs4J</name>
+  <name>QuickJs4J - Redline Experimental</name>
+  <description>QuickJs4J running on native code compiled with the experimental Endive Redline compiler</description>
 
   <dependencies>
-
-    <!-- Jackson used for function arg/return ser/deser -->
     <dependency>
-      <groupId>com.fasterxml.jackson.core</groupId>
-      <artifactId>jackson-databind</artifactId>
-      <version>${jackson.version}</version>
+      <groupId>io.roastedroot</groupId>
+      <artifactId>quickjs4j</artifactId>
+      <version>${project.version}</version>
     </dependency>
+    <!-- Panama FFM, used on Java 25+ -->
     <dependency>
       <groupId>run.endive</groupId>
-      <artifactId>runtime</artifactId>
+      <artifactId>redline-runner-experimental</artifactId>
       <version>${endive.version}</version>
     </dependency>
+    <!-- jffi, used on Java 11+ -->
     <dependency>
       <groupId>run.endive</groupId>
-      <artifactId>wasi</artifactId>
+      <artifactId>redline-runner-jffi-experimental</artifactId>
       <version>${endive.version}</version>
     </dependency>
 
     <!-- ============= Testing ============= -->
+    <dependency>
+      <groupId>io.roastedroot</groupId>
+      <artifactId>quickjs4j</artifactId>
+      <version>${project.version}</version>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-api</artifactId>
@@ -55,7 +63,6 @@
 
   <build>
     <plugins>
-
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-checkstyle-plugin</artifactId>
@@ -71,28 +78,13 @@
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-jar-plugin</artifactId>
-        <executions>
-          <execution>
-            <!-- the tests are re-run by quickjs4j-redline-experimental -->
-            <goals>
-              <goal>test-jar</goal>
-            </goals>
-          </execution>
-        </executions>
-      </plugin>
-
-      <plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>templating-maven-plugin</artifactId>
-        <executions>
-          <execution>
-            <id>filtering-java-templates</id>
-            <goals>
-              <goal>filter-sources</goal>
-            </goals>
-          </execution>
-        </executions>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <!-- run the whole core test suite on the native code -->
+          <dependenciesToScan>
+            <dependency>io.roastedroot:quickjs4j:test-jar:tests</dependency>
+          </dependenciesToScan>
+        </configuration>
       </plugin>
       <plugin>
         <groupId>run.endive</groupId>
@@ -105,14 +97,13 @@
               <goal>compile</goal>
             </goals>
             <configuration>
-              <name>io.roastedroot.quickjs4j.core.JavyPluginModule</name>
+              <name>io.roastedroot.quickjs4j.redline.JavyPluginModule</name>
               <wasmFile>../javy_quickjs4j_plugin.wasm</wasmFile>
-              <moduleInterface>io.roastedroot.quickjs4j.core.Engine</moduleInterface>
+              <redlineExperimental>true</redlineExperimental>
             </configuration>
           </execution>
         </executions>
       </plugin>
-
     </plugins>
   </build>
 </project>
