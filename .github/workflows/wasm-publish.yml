@@ -1,0 +1,94 @@
+name: Publish javy_quickjs4j_plugin.wasm
+
+on:
+  push:
+    branches: [main]
+    paths: ['javy-plugin/**']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: >-
+          Semver tag to publish, e.g. 1.2.0. Leave the default to refresh the
+          development snapshot. Must be valid semver: wkg.lock rejects "latest".
+        required: true
+        default: 999.0.0-SNAPSHOT
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+# Must match javy-plugin.version in the root pom.xml.
+env:
+  WASM_VERSION: ${{ inputs.version || '999.0.0-SNAPSHOT' }}
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v7
+
+      - name: Validate version is semver
+        run: |
+          if ! echo "$WASM_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
+            echo "::error::'$WASM_VERSION' is not valid semver; wkg.lock would reject it"
+            exit 1
+          fi
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+
+      - name: Build javy_quickjs4j_plugin.wasm
+        run: make -C javy-plugin build
+
+      - name: Install ORAS
+        uses: oras-project/setup-oras@v2
+
+      - name: Login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      # Run from the repo root so the image title is a bare filename.
+      - name: Push to GHCR
+        run: |
+          oras push \
+            --annotation "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            ghcr.io/roastedroot/quickjs4j-javy-plugin:${WASM_VERSION} \
+            javy_quickjs4j_plugin.wasm:application/wasm
+
+      - name: Set up Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+          cache: maven
+
+      # Every publish yields a new digest, so re-pin in the same run.
+      - name: Re-pin wkg.lock on main
+        if: github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+
+          # Tests first, so a broken wasm is never pinned.
+          mvn -B install -Dinlay.update
+
+          if git diff --quiet -- wkg.lock; then
+            echo "Lock already matches the published digest."
+            exit 0
+          fi
+
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add wkg.lock
+          git commit -m "Re-pin javy_quickjs4j_plugin.wasm"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Summary
+        run: |
+          echo "Published \`ghcr.io/roastedroot/quickjs4j-javy-plugin:$WASM_VERSION\`." \
+               "Open pull requests need a rebase to pick up the re-pinned lock." >> "$GITHUB_STEP_SUMMARY"

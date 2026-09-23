@@ -235,21 +235,27 @@ Key points:
 
 To build this project, you'll need:
 
-* A Rust toolchain
 * JDK 11 or newer
 * Maven
 
-Steps:
+```bash
+mvn clean install
+```
+
+**No Rust toolchain needed.** The [inlay](https://github.com/roastedroot/inlay) Maven plugin downloads the [Javy](https://github.com/bytecodealliance/javy) plugin wasm from `ghcr.io/roastedroot/quickjs4j-javy-plugin`, pinned by digest in `wkg.lock`.
+
+### Working on the Javy plugin
 
 ```bash
 rustup target add wasm32-wasip1  # Only needed once
 
-cd javy-plugin
-make build
-cd ..
-
+make -C javy-plugin build        # writes ./javy_quickjs4j_plugin.wasm (gitignored)
 mvn clean install
 ```
+
+inlay skips the download when `javy_quickjs4j_plugin.wasm` already exists, so your local build wins; delete it to go back to the published one.
+
+Pushes to `main` touching `javy-plugin/**` publish a new snapshot and re-pin `wkg.lock` ([wasm-publish.yml](.github/workflows/wasm-publish.yml)). Releases retag the pinned digest, so every release ships an immutable wasm matching its jars. To re-pin by hand: `mvn generate-sources -pl core -Dinlay.update`.
 
 ## Acknowledgements
 

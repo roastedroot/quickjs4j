@@ -55,6 +55,29 @@
 
   <build>
     <plugins>
+      <!-- Fetches the Javy plugin wasm; skipped when the file already exists. -->
+      <plugin>
+        <groupId>io.roastedroot</groupId>
+        <artifactId>inlay-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>fetch-javy-plugin</id>
+            <goals>
+              <goal>fetch</goal>
+            </goals>
+            <phase>initialize</phase>
+            <configuration>
+              <modules>
+                <module>
+                  <imageRef>ghcr.io/roastedroot/quickjs4j-javy-plugin:${javy-plugin.version}</imageRef>
+                  <outputFile>${project.basedir}/../javy_quickjs4j_plugin.wasm</outputFile>
+                </module>
+              </modules>
+              <lockFile>${project.basedir}/../wkg.lock</lockFile>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
 
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>

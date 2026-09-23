@@ -1,0 +1,40 @@
+name: Javy plugin
+
+# The main CI runs against the pinned wasm, which predates these changes.
+on:
+  pull_request:
+    branches: [ main ]
+    paths: ['javy-plugin/**']
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  plugin:
+    name: Build the plugin and test against it
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: wasm32-wasip1
+
+    - name: Build javy_quickjs4j_plugin.wasm
+      run: make -C javy-plugin build
+
+    - name: Set up Java
+      uses: actions/setup-java@v6
+      with:
+        distribution: 'temurin'
+        java-version: '11'
+        cache: maven
+
+    - name: Test quickjs4j against the locally built plugin
+      run: mvn -B install

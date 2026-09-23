@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   release:
@@ -43,6 +44,44 @@ jobs:
       - name: Compile
         run: mvn --batch-mode clean install -DskipTests
 
+      - name: Install ORAS
+        uses: oras-project/setup-oras@v2
+
+      # Retags the digest CI tested; no Rust toolchain needed.
+      - name: Publish the Javy plugin wasm under the release version
+        run: |
+          set -euo pipefail
+          DIGEST=$(grep -oE 'sha256:[0-9a-f]{64}' wkg.lock | head -1 || true)
+          if [ -z "$DIGEST" ]; then
+            echo "::error::No digest found in wkg.lock"
+            exit 1
+          fi
+          echo "Retagging $DIGEST as $VERSION"
+          echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u ${{ github.actor }} --password-stdin
+          oras tag "ghcr.io/roastedroot/quickjs4j-javy-plugin@${DIGEST}" "$VERSION"
+        env:
+          VERSION: ${{ github.event.inputs.release-version }}
+
+      # Before "Set the version", so its `git add .` picks these up.
+      - name: Pin the build to the released wasm
+        run: |
+          mvn versions:set-property -Dproperty=javy-plugin.version \
+              -DnewVersion=${{ github.event.inputs.release-version }} -DgenerateBackupPoms=false
+          mvn --batch-mode generate-sources -pl core -Dinlay.update
+
+      # Jars built against a mutable tag could not be rebuilt later.
+      - name: Verify the Javy plugin wasm tag is immutable
+        run: |
+          set -euo pipefail
+          v=$(mvn help:evaluate -Dexpression=javy-plugin.version -q -DforceStdout)
+          echo "javy-plugin.version = $v"
+          case "$v" in
+            *SNAPSHOT*)
+              echo "::error::Refusing to release jars built against the mutable wasm tag '$v'"
+              exit 1
+              ;;
+          esac
+
       - name: Setup Git
         run: |
           git config --global user.name "GitHub Actions"
@@ -70,6 +109,9 @@ jobs:
       - name: Back to Snapshot
         run: |
           mvn versions:set -DgenerateBackupPoms=false -DnewVersion=999-SNAPSHOT
+          mvn versions:set-property -Dproperty=javy-plugin.version \
+              -DnewVersion=999.0.0-SNAPSHOT -DgenerateBackupPoms=false
+          mvn --batch-mode generate-sources -pl core -Dinlay.update
           git add .
           git commit -m "Snapshot version update"
           git push

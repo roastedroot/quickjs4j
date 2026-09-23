@@ -2,3 +2,4 @@
 target
 .cargo
 .claude
+/javy_quickjs4j_plugin.wasm
