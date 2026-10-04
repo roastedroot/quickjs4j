@@ -56,6 +56,8 @@ public final class Engine implements AutoCloseable {
 
     private final ScriptCache cache;
 
+    private final int preambleLineCount;
+
     public static Builder builder() {
         return new Builder();
     }
@@ -99,6 +101,7 @@ public final class Engine implements AutoCloseable {
                             this.builtins.put(e.getKey(), builder.build());
                         });
         this.invokables = invokables;
+        this.preambleLineCount = countLineBreaks(jsPrelude());
         instance =
                 Instance.builder(JavyPluginModule.load())
                         .withMemoryFactory(memoryFactory)
@@ -326,6 +329,50 @@ public final class Engine implements AutoCloseable {
                     List.of(ValueType.I32),
                     this::invokeBuiltin);
 
+    /**
+     * Generated lines the preamble occupies before the caller's code — the offset every position QuickJS
+     * reports carries, and the number to subtract to reach the line the caller actually wrote.
+     *
+     * <p>It is the line count of the preamble text, which is assembled from the builtins and invokables
+     * the engine was configured with — so it is neither constant nor computable from outside.
+     *
+     * <p>One entry point writes a separating line of its own on top of this:
+     * {@link #compilePortableGuestFunction(String)} appends a newline before the library code, so positions
+     * from that path sit one line lower. That is a property of that method rather than of the preamble, so
+     * it is not folded in here.
+     */
+    public int preambleLineCount() {
+        return preambleLineCount;
+    }
+
+    /**
+     * Number of line breaks in {@code text}: {@code '\n'}, {@code '\r'} and {@code '\r\n'} each count once.
+     *
+     * <p>This is the number of lines the text spans before its last one, so applying it to the preamble
+     * gives the generated lines that precede the caller's code — the offset itself, with no adjustment
+     * needed at the call site.
+     *
+     * <p>Package-private so the line-break flavours can be tested; not part of the public API.
+     */
+    static int countLineBreaks(String text) {
+        if (text == null || text.isEmpty()) {
+            return 0;
+        }
+        int breaks = 0;
+        int length = text.length();
+        for (int i = 0; i < length; i++) {
+            char c = text.charAt(i);
+            if (c == '\n') {
+                breaks++;
+            } else if (c == '\r' && (i + 1 >= length || text.charAt(i + 1) != '\n')) {
+                // A '\r' stands on its own; in a "\r\n" pair the '\n' is the break, so this one is
+                // skipped rather than the index being advanced past it.
+                breaks++;
+            }
+        }
+        return breaks;
+    }
+
     // This function dynamically generates the global functions defined by the Builtins
     private String jsPrelude() {
         var preludeBuilder = new StringBuilder();
@@ -474,6 +521,30 @@ public final class Engine implements AutoCloseable {
         }
 
         return stderr.toString(UTF_8);
+    }
+
+    /**
+     * Discards everything buffered so far, so that {@link #stdout()} and {@link #stderr()} describe only
+     * what happens next.
+     *
+     * <p>Neither stream is ever cleared implicitly. An execution appends to them, and when one fails, the
+     * {@link GuestException} it throws is composed from everything they hold — so without an explicit reset
+     * a failure carries the output of every earlier run in the same engine, stack traces included. A caller
+     * that wants console output, or a diagnostic, to describe one run has to say so.
+     *
+     * <p>Call it before the run to be scoped:
+     *
+     * <pre>{@code
+     * engine.resetOutput();
+     * runner.compileAndExec(script);   // stdout(), stderr() and any GuestException now describe this run
+     * }</pre>
+     *
+     * <p>Cumulative output remains the default, because reading everything an engine produced is a
+     * reasonable thing to want and is what existing callers already get.
+     */
+    public void resetOutput() {
+        stdout.reset();
+        stderr.reset();
     }
 
     public void free(int codePtr) {
