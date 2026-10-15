@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.opentest4j.AssertionFailedError;
+import run.endive.runtime.ByteArrayMemory;
 
 public class EngineTest {
 
@@ -889,5 +890,71 @@ public class EngineTest {
         assertEquals("tuna", result.data);
 
         engine.close();
+    }
+
+    // Parent pointers make cycles, which only a GC pass frees.
+    private static final String CYCLIC_GRAPH =
+            "(function () {\n"
+                    + "  const root = { kids: [], parent: null };\n"
+                    + "  let frontier = [root], made = 1;\n"
+                    + "  while (made < 20000) {\n"
+                    + "    const next = [];\n"
+                    + "    for (const p of frontier)\n"
+                    + "      for (let k = 0; k < 4 && made < 20000; k++) {\n"
+                    + "        const c = { kids: [], parent: p };\n"
+                    + "        p.kids.push(c); next.push(c); made++;\n"
+                    + "      }\n"
+                    + "    frontier = next;\n"
+                    + "  }\n"
+                    + "})();";
+
+    private static final int ONE_MB_IN_PAGES = 16;
+    private static final int WARMUP_RUNS = 3;
+
+    // ByteArrayMemory never shrinks, so pages() is the high-water mark after each run.
+    private static int[] pagesPerRun(Engine.Builder builder, int runs) {
+        var mem = new AtomicReference<ByteArrayMemory>();
+        var pages = new int[runs];
+        try (var engine =
+                builder.withMemoryFactory(
+                                limits -> {
+                                    mem.set(new ByteArrayMemory(limits));
+                                    return mem.get();
+                                })
+                        .build()) {
+            var codePtr = engine.compile(CYCLIC_GRAPH);
+            for (int i = 0; i < runs; i++) {
+                engine.exec(codePtr);
+                pages[i] = mem.get().pages();
+            }
+            engine.free(codePtr);
+        }
+        return pages;
+    }
+
+    @Test
+    public void memoryStaysFlatAcrossExecs() {
+        var pages = pagesPerRun(Engine.builder(), 8);
+
+        // Memory may grow during warm-up, then must stay flat.
+        var warm = pages[WARMUP_RUNS - 1];
+        var last = pages[pages.length - 1];
+        assertTrue(
+                last <= warm + ONE_MB_IN_PAGES,
+                "memory grew from " + warm + " to " + last + " pages after warm-up");
+    }
+
+    @Test
+    public void gcThresholdCanDisableCollection() {
+        var pages = pagesPerRun(Engine.builder().withGcThreshold(Long.MAX_VALUE), 5);
+
+        assertTrue(
+                pages[4] > pages[0] + ONE_MB_IN_PAGES,
+                "memory only grew from " + pages[0] + " to " + pages[4] + " pages with GC off");
+    }
+
+    @Test
+    public void gcThresholdRejectsNegative() {
+        assertThrows(IllegalArgumentException.class, () -> Engine.builder().withGcThreshold(-1));
     }
 }

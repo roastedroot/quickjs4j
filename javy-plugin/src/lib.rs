@@ -52,15 +52,17 @@ fn invoke_exec(module_str: String, name_str: String, args_str: String) -> String
     return_str
 }
 
+// usize::MAX, or anything larger, turns GC off.
 #[export_name = "initialize_runtime"]
-pub extern "C" fn initialize_runtime() {
+pub extern "C" fn initialize_runtime(gc_threshold: u64) {
     javy_plugin_api::initialize_runtime(
         || {
             let mut config = Config::default();
             config
                 .event_loop(true)
                 .text_encoding(true)
-                .javy_stream_io(true);
+                .javy_stream_io(true)
+                .gc_threshold(gc_threshold.min(usize::MAX as u64) as usize);
             config
         },
         |runtime| {
