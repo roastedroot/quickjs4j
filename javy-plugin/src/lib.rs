@@ -1,6 +1,7 @@
 extern crate javy_plugin_api;
 use javy_plugin_api::{import_namespace, javy::quickjs::prelude::Func, Config};
 use std::alloc::{alloc, dealloc, Layout};
+use std::convert::TryFrom;
 
 import_namespace!("endive_plugin");
 
@@ -52,15 +53,18 @@ fn invoke_exec(module_str: String, name_str: String, args_str: String) -> String
     return_str
 }
 
+// Java passes a long, but usize is 32 bits on wasm32. Values too big to fit
+// become usize::MAX, which QuickJS reads as "never collect".
 #[export_name = "initialize_runtime"]
-pub extern "C" fn initialize_runtime() {
+pub extern "C" fn initialize_runtime(gc_threshold: u64) {
     javy_plugin_api::initialize_runtime(
         || {
             let mut config = Config::default();
             config
                 .event_loop(true)
                 .text_encoding(true)
-                .javy_stream_io(true);
+                .javy_stream_io(true)
+                .gc_threshold(usize::try_from(gc_threshold).unwrap_or(usize::MAX));
             config
         },
         |runtime| {

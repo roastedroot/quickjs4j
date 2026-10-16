@@ -890,4 +890,9 @@ public class EngineTest {
 
         engine.close();
     }
+
+    @Test
+    public void gcThresholdRejectsNegative() {
+        assertThrows(IllegalArgumentException.class, () -> Engine.builder().withGcThreshold(-1));
+    }
 }
