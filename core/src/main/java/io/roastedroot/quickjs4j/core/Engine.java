@@ -56,6 +56,9 @@ public final class Engine implements AutoCloseable {
 
     private final ScriptCache cache;
 
+    private int jsPreludeLineCount;
+    private String jsPrelude;
+
     public static Builder builder() {
         return new Builder();
     }
@@ -111,6 +114,7 @@ public final class Engine implements AutoCloseable {
                         .build();
         exports = new Engine_ModuleExports(instance);
         exports.initializeRuntime();
+        buildJsPrelude();
     }
 
     private String readJavyString(int ptr, int len) {
@@ -326,11 +330,48 @@ public final class Engine implements AutoCloseable {
                     List.of(ValueType.I32),
                     this::invokeBuiltin);
 
-    // This function dynamically generates the global functions defined by the Builtins
+    /**
+     * Reduce Error's line numbers by this to get actual line numbers from your script.
+     * */
+    public int jsPreludeLineCount() {
+        return jsPreludeLineCount;
+    }
+
+    /**
+     * Number of line breaks in text: '\n', '\r', '\r\n' each count once.
+     */
+    static int countLineBreaks(String text) {
+        if (text == null || text.isEmpty()) {
+            return 0;
+        }
+        int breaks = 0;
+        int length = text.length();
+        for (int i = 0; i < length; i++) {
+            char c = text.charAt(i);
+            if (c == '\n') {
+                breaks++;
+            } else if (c == '\r' && (i + 1 >= length || text.charAt(i + 1) != '\n')) {
+                // A '\r' stands on its own; in a "\r\n" pair the '\n' is the break, so this one is
+                // skipped rather than the index being advanced past it.
+                breaks++;
+            }
+        }
+        return breaks;
+    }
+
     private String jsPrelude() {
+        return jsPrelude;
+    }
+
+    /**
+     * generate the global functions defined by the Builtins and count its lines.
+     */
+    private void buildJsPrelude() {
         var preludeBuilder = new StringBuilder();
+        int jsPreludeLineCount = 0;
         for (Map.Entry<String, Builtins> builtin : builtins.entrySet()) {
-            preludeBuilder.append("globalThis." + builtin.getKey() + " = {};\n");
+            preludeBuilder.append("globalThis.").append(builtin.getKey()).append(" = {};\n");
+            jsPreludeLineCount++;
             for (var func : builtins.get(builtin.getKey()).functions()) {
                 preludeBuilder.append(
                         "globalThis."
@@ -342,9 +383,11 @@ public final class Engine implements AutoCloseable {
                                 + "\", \""
                                 + func.name()
                                 + "\", JSON.stringify(args))) };\n");
+                jsPreludeLineCount++;
             }
         }
-        return preludeBuilder.toString();
+        this.jsPreludeLineCount = jsPreludeLineCount;
+        this.jsPrelude = preludeBuilder.toString();
     }
 
     // This function dynamically generates the js handlers for Invokables
@@ -474,6 +517,15 @@ public final class Engine implements AutoCloseable {
         }
 
         return stderr.toString(UTF_8);
+    }
+
+    /**
+     * Discards everything buffered so far, so that {@link #stdout()} and {@link #stderr()} describe only
+     * what happens next.
+     */
+    public void resetOutput() {
+        stdout.reset();
+        stderr.reset();
     }
 
     public void free(int codePtr) {
