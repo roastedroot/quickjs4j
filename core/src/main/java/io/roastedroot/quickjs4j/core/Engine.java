@@ -364,7 +364,7 @@ public final class Engine implements AutoCloseable {
     }
 
     /**
-     * Dynamically generates the global functions defined by the Builtins
+     * generate the global functions defined by the Builtins and count its lines.
      */
     private void buildJsPrelude() {
         var preludeBuilder = new StringBuilder();
