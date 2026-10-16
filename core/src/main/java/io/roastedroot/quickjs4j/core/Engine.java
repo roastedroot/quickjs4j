@@ -56,7 +56,8 @@ public final class Engine implements AutoCloseable {
 
     private final ScriptCache cache;
 
-    private final int preambleLineCount;
+    private int preambleLineCount;
+    private String jsPrelude;
 
     public static Builder builder() {
         return new Builder();
@@ -101,7 +102,6 @@ public final class Engine implements AutoCloseable {
                             this.builtins.put(e.getKey(), builder.build());
                         });
         this.invokables = invokables;
-        this.preambleLineCount = countLineBreaks(jsPrelude());
         instance =
                 Instance.builder(JavyPluginModule.load())
                         .withMemoryFactory(memoryFactory)
@@ -114,6 +114,7 @@ public final class Engine implements AutoCloseable {
                         .build();
         exports = new Engine_ModuleExports(instance);
         exports.initializeRuntime();
+        buildJsPrelude();
     }
 
     private String readJavyString(int ptr, int len) {
@@ -358,11 +359,19 @@ public final class Engine implements AutoCloseable {
         return breaks;
     }
 
-    // This function dynamically generates the global functions defined by the Builtins
     private String jsPrelude() {
+        return jsPrelude;
+    }
+
+    /**
+    * Dynamically generates the global functions defined by the Builtins
+    */
+    private String buildJsPrelude() {
         var preludeBuilder = new StringBuilder();
+        int preambleLineCount = 0;
         for (Map.Entry<String, Builtins> builtin : builtins.entrySet()) {
             preludeBuilder.append("globalThis." + builtin.getKey() + " = {};\n");
+            preambleLineCount++;
             for (var func : builtins.get(builtin.getKey()).functions()) {
                 preludeBuilder.append(
                         "globalThis."
@@ -374,9 +383,11 @@ public final class Engine implements AutoCloseable {
                                 + "\", \""
                                 + func.name()
                                 + "\", JSON.stringify(args))) };\n");
+                preambleLineCount++;
             }
         }
-        return preludeBuilder.toString();
+        this.preambleLineCount = preambleLineCount;
+        return this.jsPrelude = preludeBuilder.toString();
     }
 
     // This function dynamically generates the js handlers for Invokables
