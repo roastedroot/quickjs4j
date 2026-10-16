@@ -511,21 +511,6 @@ public final class Engine implements AutoCloseable {
     /**
      * Discards everything buffered so far, so that {@link #stdout()} and {@link #stderr()} describe only
      * what happens next.
-     *
-     * <p>Neither stream is ever cleared implicitly. An execution appends to them, and when one fails, the
-     * {@link GuestException} it throws is composed from everything they hold — so without an explicit reset
-     * a failure carries the output of every earlier run in the same engine, stack traces included. A caller
-     * that wants console output, or a diagnostic, to describe one run has to say so.
-     *
-     * <p>Call it before the run to be scoped:
-     *
-     * <pre>{@code
-     * engine.resetOutput();
-     * runner.compileAndExec(script);   // stdout(), stderr() and any GuestException now describe this run
-     * }</pre>
-     *
-     * <p>Cumulative output remains the default, because reading everything an engine produced is a
-     * reasonable thing to want and is what existing callers already get.
      */
     public void resetOutput() {
         stdout.reset();
