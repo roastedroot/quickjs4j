@@ -12,10 +12,8 @@ import org.junit.jupiter.api.Test;
  * The line offset is the only thing a source-map aware layer needs from the engine: it is subtracted from
  * every line QuickJS reports to get back to the caller's own line.
  *
- * <p>There is one such offset, the preamble's. The portable compile path adds a separating line of its own,
- * which is recorded here rather than reflected in the API.
  */
-public class PreambleLineCountTest {
+public class JsPreludeLineCountTest {
 
     private static final Pattern FRAME = Pattern.compile("function\\.mjs:(\\d+):(\\d+)");
 
@@ -44,7 +42,7 @@ public class PreambleLineCountTest {
     public void countsTheEngineModuleAndItsFunctions() {
         try (Engine engine = Engine.builder().build()) {
             // "globalThis.quickjs4j_engine = {}" plus module_name, function_name and args.
-            assertEquals(4, engine.preambleLineCount());
+            assertEquals(4, engine.jsPreludeLineCount());
         }
     }
 
@@ -57,7 +55,7 @@ public class PreambleLineCountTest {
 
         try (Engine engine = Engine.builder().addBuiltins(builtins).build()) {
             // One more module and one more function.
-            assertEquals(6, engine.preambleLineCount());
+            assertEquals(6, engine.jsPreludeLineCount());
         }
     }
 
@@ -71,7 +69,7 @@ public class PreambleLineCountTest {
 
         try (Engine engine = Engine.builder().addInvokables(invokables).build()) {
             // The module itself, plus the generated set_result function for each guest function.
-            assertEquals(7, engine.preambleLineCount());
+            assertEquals(7, engine.jsPreludeLineCount());
         }
     }
 
@@ -90,15 +88,10 @@ public class PreambleLineCountTest {
     }
 
     /**
-     * Every position carries the preamble's offset, so a source-map consumer subtracts that one number. The
-     * portable compile path writes a separating line of its own, which is a property of that method rather
-     * than of the preamble: it is pinned here so the difference stays visible instead of being folded into
-     * the API.
-     *
-     * <p>Each measurement takes its own runner, because the guest output buffers accumulate within one.
+     * Every position carries the jsPrelude's offset, so a source-map consumer subtracts that one number.
      */
     @Test
-    public void reportedPositionsCarryThePreambleOffset() {
+    public void reportedPositionsCarryTheJsPreludeOffset() {
         Invokables invokables = oneGuestFunction();
 
         int viaCompile;
@@ -108,9 +101,9 @@ public class PreambleLineCountTest {
                     () -> runner.compileAndExec("throw new Error('compiled');"));
             viaCompile = firstReportedLine(runner);
             assertEquals(
-                    runner.preambleLineCount() + 1,
+                    runner.jsPreludeLineCount() + 1,
                     viaCompile,
-                    "a throw on the caller's line 1 is reported one line past the preamble");
+                    "a throw on the caller's line 1 is reported one line past the jsPrelude");
         }
 
         int viaPortableCompile;
@@ -125,7 +118,7 @@ public class PreambleLineCountTest {
                                     "function boom() { throw new Error('portable'); }"));
             viaPortableCompile = firstReportedLine(runner);
             assertEquals(
-                    runner.preambleLineCount() + 2,
+                    runner.jsPreludeLineCount() + 2,
                     viaPortableCompile,
                     "the portable path writes one separating line of its own");
         }

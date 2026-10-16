@@ -85,10 +85,10 @@ public final class Runner implements AutoCloseable {
     }
 
     /**
-     * @see Engine#preambleLineCount()
+     * @see Engine#jsPreludeLineCount()
      */
-    public int preambleLineCount() {
-        return this.engine.preambleLineCount();
+    public int jsPreludeLineCount() {
+        return this.engine.jsPreludeLineCount();
     }
 
     @Override

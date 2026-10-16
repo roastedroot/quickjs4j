@@ -56,7 +56,7 @@ public final class Engine implements AutoCloseable {
 
     private final ScriptCache cache;
 
-    private int preambleLineCount;
+    private int jsPreludeLineCount;
     private String jsPrelude;
 
     public static Builder builder() {
@@ -333,8 +333,8 @@ public final class Engine implements AutoCloseable {
     /**
      * Reduce Error's line numbers by this to get actual line numbers from your script.
      * */
-    public int preambleLineCount() {
-        return preambleLineCount;
+    public int jsPreludeLineCount() {
+        return jsPreludeLineCount;
     }
 
     /**
@@ -366,12 +366,12 @@ public final class Engine implements AutoCloseable {
     /**
      * Dynamically generates the global functions defined by the Builtins
      */
-    private String buildJsPrelude() {
+    private void buildJsPrelude() {
         var preludeBuilder = new StringBuilder();
-        int preambleLineCount = 0;
+        int jsPreludeLineCount = 0;
         for (Map.Entry<String, Builtins> builtin : builtins.entrySet()) {
-            preludeBuilder.append("globalThis." + builtin.getKey() + " = {};\n");
-            preambleLineCount++;
+            preludeBuilder.append("globalThis.").append(builtin.getKey()).append(" = {};\n");
+            jsPreludeLineCount++;
             for (var func : builtins.get(builtin.getKey()).functions()) {
                 preludeBuilder.append(
                         "globalThis."
@@ -383,11 +383,11 @@ public final class Engine implements AutoCloseable {
                                 + "\", \""
                                 + func.name()
                                 + "\", JSON.stringify(args))) };\n");
-                preambleLineCount++;
+                jsPreludeLineCount++;
             }
         }
-        this.preambleLineCount = preambleLineCount;
-        return this.jsPrelude = preludeBuilder.toString();
+        this.jsPreludeLineCount = jsPreludeLineCount;
+        this.jsPrelude = preludeBuilder.toString();
     }
 
     // This function dynamically generates the js handlers for Invokables
