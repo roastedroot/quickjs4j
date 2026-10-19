@@ -77,6 +77,14 @@ public final class Runner implements AutoCloseable {
         return this.engine.stderr();
     }
 
+    public void clearOutput() {
+        this.engine.clearOutput();
+    }
+
+    public int jsPreludeLineCount() {
+        return this.engine.jsPreludeLineCount();
+    }
+
     @Override
     public void close() {
         if (es != null) {

@@ -56,6 +56,9 @@ public final class Engine implements AutoCloseable {
 
     private final ScriptCache cache;
 
+    private int jsPreludeLineCount;
+    private String jsPrelude;
+
     public static Builder builder() {
         return new Builder();
     }
@@ -111,6 +114,7 @@ public final class Engine implements AutoCloseable {
                         .build();
         exports = new Engine_ModuleExports(instance);
         exports.initializeRuntime();
+        buildJsPrelude();
     }
 
     private String readJavyString(int ptr, int len) {
@@ -159,8 +163,7 @@ public final class Engine implements AutoCloseable {
         int codePtr = 0;
         try {
             var buf = new StringBuilder();
-            buf.append(jsPrelude());
-            buf.append('\n');
+            buf.append(jsPrelude);
             buf.append(libraryCode);
             buf.append('\n');
             buf.append(jsSuffix());
@@ -326,11 +329,17 @@ public final class Engine implements AutoCloseable {
                     List.of(ValueType.I32),
                     this::invokeBuiltin);
 
+    // Number of lines prepended to user code by the engine
+    public int jsPreludeLineCount() {
+        return jsPreludeLineCount;
+    }
+
     // This function dynamically generates the global functions defined by the Builtins
-    private String jsPrelude() {
+    private void buildJsPrelude() {
         var preludeBuilder = new StringBuilder();
         for (Map.Entry<String, Builtins> builtin : builtins.entrySet()) {
             preludeBuilder.append("globalThis." + builtin.getKey() + " = {};\n");
+            jsPreludeLineCount++;
             for (var func : builtins.get(builtin.getKey()).functions()) {
                 preludeBuilder.append(
                         "globalThis."
@@ -342,9 +351,10 @@ public final class Engine implements AutoCloseable {
                                 + "\", \""
                                 + func.name()
                                 + "\", JSON.stringify(args))) };\n");
+                jsPreludeLineCount++;
             }
         }
-        return preludeBuilder.toString();
+        jsPrelude = preludeBuilder.toString();
     }
 
     // This function dynamically generates the js handlers for Invokables
@@ -372,7 +382,7 @@ public final class Engine implements AutoCloseable {
     }
 
     public int compile(byte[] js) {
-        byte[] prelude = jsPrelude().getBytes(UTF_8);
+        byte[] prelude = jsPrelude.getBytes(UTF_8);
         byte[] jsCode = new byte[prelude.length + js.length];
         System.arraycopy(prelude, 0, jsCode, 0, prelude.length);
         System.arraycopy(js, 0, jsCode, prelude.length, js.length);
@@ -474,6 +484,11 @@ public final class Engine implements AutoCloseable {
         }
 
         return stderr.toString(UTF_8);
+    }
+
+    public void clearOutput() {
+        stdout.reset();
+        stderr.reset();
     }
 
     public void free(int codePtr) {
