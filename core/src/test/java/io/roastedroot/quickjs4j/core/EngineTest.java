@@ -895,4 +895,16 @@ public class EngineTest {
     public void gcThresholdRejectsNegative() {
         assertThrows(IllegalArgumentException.class, () -> Engine.builder().withGcThreshold(-1));
     }
+
+    @Test
+    public void jsPreludeLineCountGrowsWithEveryRegisteredBuiltin() {
+        var builtins =
+                Builtins.builder("from_java")
+                        .addStringToString("shout", String::toUpperCase)
+                        .build();
+
+        try (var engine = Engine.builder().addBuiltins(builtins).build()) {
+            assertEquals(6, engine.jsPreludeLineCount());
+        }
+    }
 }
