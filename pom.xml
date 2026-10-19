@@ -4,7 +4,7 @@
 
   <groupId>io.roastedroot</groupId>
   <artifactId>quickjs4j-parent</artifactId>
-  <version>0.1.1</version>
+  <version>999-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <name>quickjs4j-parent</name>
@@ -51,7 +51,7 @@
     <maven.compiler.release>11</maven.compiler.release>
     <maven.compiler.failOnWarning>true</maven.compiler.failOnWarning>
     <maven.dependency.failOnWarning>true</maven.dependency.failOnWarning>
-    <project.build.outputTimestamp>2026-10-19T13:18:04Z</project.build.outputTimestamp>
+    <project.build.outputTimestamp>2026-10-19T13:28:26Z</project.build.outputTimestamp>
 
     <!-- build tool versions -->
     <checkstyle.version>14.3.0</checkstyle.version>
@@ -69,7 +69,7 @@
     <junit.version>5.14.4</junit.version>
 
     <!-- Javy plugin wasm tag, pinned by digest in wkg.lock -->
-    <javy-plugin.version>0.1.1</javy-plugin.version>
+    <javy-plugin.version>999.0.0-SNAPSHOT</javy-plugin.version>
 
     <!-- runtime versions -->
     <endive.version>1.1.0</endive.version>
