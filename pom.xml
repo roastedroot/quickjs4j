@@ -69,7 +69,7 @@
     <junit.version>5.14.4</junit.version>
 
     <!-- Javy plugin wasm tag, pinned by digest in wkg.lock -->
-    <javy-plugin.version>999.0.0-SNAPSHOT</javy-plugin.version>
+    <javy-plugin.version>999.0.0-gc-217</javy-plugin.version>
 
     <!-- runtime versions -->
     <endive.version>1.1.0</endive.version>

@@ -31,6 +31,9 @@ public final class Engine implements AutoCloseable {
     private static final byte[] NULL_BYTES = "null".getBytes(UTF_8);
     public static final ObjectMapper DEFAULT_OBJECT_MAPPER = new ObjectMapper();
 
+    // 256 KiB, QuickJS's default
+    private static final long DEFAULT_GC_THRESHOLD = 256 * 1024;
+
     private final ByteArrayOutputStream stdout;
     private final ByteArrayOutputStream stderr;
     private final WasiOptions wasiOpts;
@@ -71,7 +74,8 @@ public final class Engine implements AutoCloseable {
             ScriptCache cache,
             Logger logger,
             ByteArrayOutputStream stdout,
-            ByteArrayOutputStream stderr) {
+            ByteArrayOutputStream stderr,
+            long gcThreshold) {
         this.mapper = mapper;
         this.builtins = builtins;
         this.cache = cache;
@@ -113,7 +117,7 @@ public final class Engine implements AutoCloseable {
                                         .build())
                         .build();
         exports = new Engine_ModuleExports(instance);
-        exports.initializeRuntime();
+        exports.initializeRuntime(gcThreshold);
         buildJsPrelude();
     }
 
@@ -566,6 +570,7 @@ public final class Engine implements AutoCloseable {
         private Logger logger;
         private ByteArrayOutputStream stdout;
         private ByteArrayOutputStream stderr;
+        private long gcThreshold = DEFAULT_GC_THRESHOLD;
 
         private Builder() {}
 
@@ -609,6 +614,18 @@ public final class Engine implements AutoCloseable {
             return this;
         }
 
+        /**
+         * Bytes allocated before the first GC pass; later passes trigger at 1.5x live memory.
+         * {@link Long#MAX_VALUE} turns GC off.
+         */
+        public Builder withGcThreshold(long bytes) {
+            if (bytes < 0) {
+                throw new IllegalArgumentException("gcThreshold must be >= 0, got: " + bytes);
+            }
+            this.gcThreshold = bytes;
+            return this;
+        }
+
         public Engine build() {
             if (mapper == null) {
                 mapper = DEFAULT_OBJECT_MAPPER;
@@ -646,7 +663,8 @@ public final class Engine implements AutoCloseable {
                     cache,
                     logger,
                     stdout,
-                    stderr);
+                    stderr,
+                    gcThreshold);
         }
     }
 }
