@@ -257,6 +257,8 @@ inlay skips the download when `javy_quickjs4j_plugin.wasm` already exists, so yo
 
 Pushes to `main` touching `javy-plugin/**` publish a new snapshot and re-pin `wkg.lock` ([wasm-publish.yml](.github/workflows/wasm-publish.yml)). Releases retag the pinned digest, so every release ships an immutable wasm matching its jars. To re-pin by hand: `mvn generate-sources -pl core -Dinlay.update`.
 
+A PR that changes the plugin's exports cannot pass CI against the pinned snapshot. Push the branch to this repo, publish it under its own tag with `gh workflow run wasm-publish.yml --ref <branch> -f version=999.0.0-<topic>`, then set `javy-plugin.version` to that tag and re-pin. After merging, switch back to `999.0.0-SNAPSHOT` and re-pin before releasing.
+
 ## Acknowledgements
 
 This project stands on the shoulders of giants:

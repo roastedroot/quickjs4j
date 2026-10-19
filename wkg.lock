@@ -9,9 +9,4 @@ registry = "ghcr.io"
 [[packages.versions]]
 requirement = "=999.0.0-SNAPSHOT"
 version = "999.0.0-SNAPSHOT"
-digest = "sha256:621fb3dc02256ca23f970c24abfc8c29ae96c53cb702046b22c53e28e4251d2f"
-
-[[packages.versions]]
-requirement = "=999.0.0-gc-217"
-version = "999.0.0-gc-217"
-digest = "sha256:a061d0bb64b4fa0a8e39183828773a61dd0e70c001275c1a636e9c67f53d92a9"
+digest = "sha256:41306eee14eb66e8a7f479fa80d418d278b5b1eb2d5af8325d5c2793701ca29f"
