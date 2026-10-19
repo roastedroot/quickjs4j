@@ -163,8 +163,7 @@ public final class Engine implements AutoCloseable {
         int codePtr = 0;
         try {
             var buf = new StringBuilder();
-            buf.append(jsPrelude());
-            buf.append('\n');
+            buf.append(jsPrelude);
             buf.append(libraryCode);
             buf.append('\n');
             buf.append(jsSuffix());
@@ -330,47 +329,16 @@ public final class Engine implements AutoCloseable {
                     List.of(ValueType.I32),
                     this::invokeBuiltin);
 
-    /**
-     * Reduce Error's line numbers by this to get actual line numbers from your script.
-     * */
+    // Number of lines prepended to user code by the engine
     public int jsPreludeLineCount() {
         return jsPreludeLineCount;
     }
 
-    /**
-     * Number of line breaks in text: '\n', '\r', '\r\n' each count once.
-     */
-    static int countLineBreaks(String text) {
-        if (text == null || text.isEmpty()) {
-            return 0;
-        }
-        int breaks = 0;
-        int length = text.length();
-        for (int i = 0; i < length; i++) {
-            char c = text.charAt(i);
-            if (c == '\n') {
-                breaks++;
-            } else if (c == '\r' && (i + 1 >= length || text.charAt(i + 1) != '\n')) {
-                // A '\r' stands on its own; in a "\r\n" pair the '\n' is the break, so this one is
-                // skipped rather than the index being advanced past it.
-                breaks++;
-            }
-        }
-        return breaks;
-    }
-
-    private String jsPrelude() {
-        return jsPrelude;
-    }
-
-    /**
-     * generate the global functions defined by the Builtins and count its lines.
-     */
+    // This function dynamically generates the global functions defined by the Builtins
     private void buildJsPrelude() {
         var preludeBuilder = new StringBuilder();
-        int jsPreludeLineCount = 0;
         for (Map.Entry<String, Builtins> builtin : builtins.entrySet()) {
-            preludeBuilder.append("globalThis.").append(builtin.getKey()).append(" = {};\n");
+            preludeBuilder.append("globalThis." + builtin.getKey() + " = {};\n");
             jsPreludeLineCount++;
             for (var func : builtins.get(builtin.getKey()).functions()) {
                 preludeBuilder.append(
@@ -386,8 +354,7 @@ public final class Engine implements AutoCloseable {
                 jsPreludeLineCount++;
             }
         }
-        this.jsPreludeLineCount = jsPreludeLineCount;
-        this.jsPrelude = preludeBuilder.toString();
+        jsPrelude = preludeBuilder.toString();
     }
 
     // This function dynamically generates the js handlers for Invokables
@@ -415,7 +382,7 @@ public final class Engine implements AutoCloseable {
     }
 
     public int compile(byte[] js) {
-        byte[] prelude = jsPrelude().getBytes(UTF_8);
+        byte[] prelude = jsPrelude.getBytes(UTF_8);
         byte[] jsCode = new byte[prelude.length + js.length];
         System.arraycopy(prelude, 0, jsCode, 0, prelude.length);
         System.arraycopy(js, 0, jsCode, prelude.length, js.length);
@@ -519,11 +486,7 @@ public final class Engine implements AutoCloseable {
         return stderr.toString(UTF_8);
     }
 
-    /**
-     * Discards everything buffered so far, so that {@link #stdout()} and {@link #stderr()} describe only
-     * what happens next.
-     */
-    public void resetOutput() {
+    public void clearOutput() {
         stdout.reset();
         stderr.reset();
     }

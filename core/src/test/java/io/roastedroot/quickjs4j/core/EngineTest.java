@@ -890,4 +890,16 @@ public class EngineTest {
 
         engine.close();
     }
+
+    @Test
+    public void jsPreludeLineCountGrowsWithEveryRegisteredBuiltin() {
+        var builtins =
+                Builtins.builder("from_java")
+                        .addStringToString("shout", String::toUpperCase)
+                        .build();
+
+        try (var engine = Engine.builder().addBuiltins(builtins).build()) {
+            assertEquals(6, engine.jsPreludeLineCount());
+        }
+    }
 }
