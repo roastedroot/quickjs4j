@@ -11,6 +11,12 @@ It supports the standard `ScriptEngine` API plus the `Compilable` and `Invocable
   <artifactId>quickjs4j-scripting-experimental</artifactId>
   <version>${quickjs4j.version}</version>
 </dependency>
+<!-- or quickjs4j-jackson2 -->
+<dependency>
+  <groupId>io.roastedroot</groupId>
+  <artifactId>quickjs4j-jackson3</artifactId>
+  <version>${quickjs4j.version}</version>
+</dependency>
 ```
 
 ## Obtaining the Engine

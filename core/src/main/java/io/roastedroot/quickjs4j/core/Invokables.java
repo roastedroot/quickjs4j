@@ -1,11 +1,11 @@
 package io.roastedroot.quickjs4j.core;
 
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
+/** A JS module ({@code globalThis.<moduleName>}) of guest functions callable from Java. */
 public final class Invokables {
     private final String moduleName;
     private final Map<String, GuestFunction> functions;
@@ -33,21 +33,21 @@ public final class Invokables {
 
     public static final class Builder {
         private final String moduleName;
-        private List<GuestFunction> functions = new ArrayList<>();
+        private final Map<String, GuestFunction> functions = new LinkedHashMap<>();
 
         private Builder(String moduleName) {
-            this.moduleName = moduleName;
+            this.moduleName = Identifiers.check(moduleName, "module");
         }
 
         public Builder add(GuestFunction fun) {
-            if (functions.contains(fun.name())) {
+            if (functions.containsKey(fun.name())) {
                 throw new IllegalArgumentException(
                         "A function with name: "
                                 + fun.name()
                                 + " is already defined in the module: "
                                 + moduleName);
             }
-            functions.add(fun);
+            functions.put(fun.name(), fun);
             return this;
         }
 
@@ -58,12 +58,13 @@ public final class Invokables {
             return this;
         }
 
+        public Builder add(String name) {
+            return add(new GuestFunction(name));
+        }
+
         public Invokables build() {
-            var finalFuncs = new HashMap<String, GuestFunction>();
-            for (GuestFunction func : functions) {
-                finalFuncs.put(func.name(), func);
-            }
-            return new Invokables(moduleName, finalFuncs);
+            return new Invokables(
+                    moduleName, Collections.unmodifiableMap(new LinkedHashMap<>(functions)));
         }
     }
 }
