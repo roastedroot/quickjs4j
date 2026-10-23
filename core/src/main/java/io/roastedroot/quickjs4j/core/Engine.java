@@ -55,6 +55,8 @@ public final class Engine implements AutoCloseable {
 
     private int jsPreludeLineCount;
     private String jsPrelude;
+    private String jsSuffix;
+    private String jsEpilogue;
 
     public static Builder builder() {
         return new Builder();
@@ -121,6 +123,8 @@ public final class Engine implements AutoCloseable {
         exports = new Engine_ModuleExports(instance);
         exports.initializeRuntime(gcThreshold);
         buildJsPrelude();
+        buildJsSuffix();
+        buildJsEpilogue();
     }
 
     private String readJavyString(int ptr, int len) {
@@ -140,22 +144,42 @@ public final class Engine implements AutoCloseable {
                 moduleName, name, args, compilePortableGuestFunction(libraryCode));
     }
 
-    private String invokeFunction() {
-        var funInvoke =
-                "globalThis[quickjs4j_engine.module_name()][quickjs4j_engine.function_name()](...quickjs4j_engine.args())";
-        Function<String, String> setResult =
-                (value) ->
-                        "java_invoke(quickjs4j_engine.module_name(),"
-                                + " quickjs4j_engine.function_name() + \"_set_result\","
-                                + " JSON.stringify(["
-                                + value
-                                + "]))";
-
-        return "Promise.resolve("
-                + funInvoke
-                + ").then((value) => { "
-                + setResult.apply("value")
-                + " }, (err) => { throw err; })";
+    // Calls the requested guest function without reading any global the guest code can replace
+    private void buildJsEpilogue() {
+        var guests = new StringBuilder();
+        for (var invokable : invokables.values()) {
+            guests.append('[').append(quote(invokable.moduleName())).append("]: {");
+            for (var func : invokable.functions()) {
+                guests.append('[')
+                        .append(quote(func.name()))
+                        .append("]: ")
+                        .append(func.globalName())
+                        .append(", ");
+            }
+            guests.append("}, ");
+        }
+        jsEpilogue =
+                "{\n"
+                        + "const __quickjs4j_invoke = java_invoke;\n"
+                        + "const __quickjs4j_engine = (fn) => JSON.parse(__quickjs4j_invoke("
+                        + quote(ENGINE_MODULE_NAME)
+                        + ", fn, \"[]\"));\n"
+                        + "const __quickjs4j_guests = {"
+                        + guests
+                        + "};\n"
+                        + "const __quickjs4j_module = __quickjs4j_engine("
+                        + quote(MODULE_NAME_FUNC)
+                        + ");\n"
+                        + "const __quickjs4j_function = __quickjs4j_engine("
+                        + quote(FUNCTION_NAME_FUNC)
+                        + ");\n"
+                        + "Promise.resolve(__quickjs4j_guests[__quickjs4j_module][__quickjs4j_function]"
+                        + "(...__quickjs4j_engine("
+                        + quote(ARGS_FUNC)
+                        + "))).then((value) => { __quickjs4j_invoke(__quickjs4j_module,"
+                        + " __quickjs4j_function + \"_set_result\", JSON.stringify([value])); },"
+                        + " (err) => { throw err; });\n"
+                        + "}\n";
     }
 
     // Plan:
@@ -173,10 +197,8 @@ public final class Engine implements AutoCloseable {
             buf.append(jsPrelude);
             buf.append(libraryCode);
             buf.append('\n');
-            buf.append(jsSuffix());
-            buf.append('\n');
-            buf.append(invokeFunction());
-            buf.append(";\n");
+            buf.append(jsSuffix);
+            buf.append(jsEpilogue);
 
             codePtr = compileRaw(buf.toString().getBytes(UTF_8));
             return readCompiled(codePtr);
@@ -388,7 +410,7 @@ public final class Engine implements AutoCloseable {
     }
 
     // This function dynamically generates the js handlers for Invokables
-    private String jsSuffix() {
+    private void buildJsSuffix() {
         var suffixBuilder = new StringBuilder();
         for (Map.Entry<String, Invokables> invokable : invokables.entrySet()) {
             // The object is already defined by the set_result, just add the handlers
@@ -404,7 +426,7 @@ public final class Engine implements AutoCloseable {
                                 + ";\n");
             }
         }
-        return suffixBuilder.toString();
+        jsSuffix = suffixBuilder.toString();
     }
 
     public int compile(String js) {

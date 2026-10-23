@@ -498,6 +498,22 @@ public class EngineTest {
     }
 
     @Test
+    public void guestFunctionCanReplaceEngineGlobals() {
+        var invokables = Invokables.builder("from_js").add("hide").build();
+        var code =
+                "function hide() {\n"
+                        + "  globalThis.java_invoke = undefined;\n"
+                        + "  globalThis.quickjs4j_engine = undefined;\n"
+                        + "  globalThis.from_js = undefined;\n"
+                        + "  return 42;\n"
+                        + "}\n";
+
+        try (var engine = Engine.builder().addInvokables(invokables).build()) {
+            assertEquals("42", engine.invokeGuestFunction("from_js", "hide", List.of(), code));
+        }
+    }
+
+    @Test
     public void enableCachingOfCompiledJS() {
         var engine = Engine.builder().build();
         var codePtr = engine.compile("console.log(\"hello world!\")");
