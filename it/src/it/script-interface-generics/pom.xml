@@ -14,12 +14,12 @@
   <dependencies>
     <dependency>
       <groupId>io.roastedroot</groupId>
-      <artifactId>quickjs4j</artifactId>
+      <artifactId>quickjs4j-annotations</artifactId>
       <version>@project.version@</version>
     </dependency>
     <dependency>
       <groupId>io.roastedroot</groupId>
-      <artifactId>quickjs4j-annotations</artifactId>
+      <artifactId>quickjs4j-jackson2</artifactId>
       <version>@project.version@</version>
     </dependency>
 

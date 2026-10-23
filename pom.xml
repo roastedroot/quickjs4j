@@ -31,10 +31,14 @@
 
   <modules>
     <module>annotations</module>
+    <module>binding</module>
     <module>core</module>
     <module>it</module>
+    <module>jackson2</module>
+    <module>jackson3</module>
     <module>processor</module>
     <module>scripting</module>
+    <module>tck</module>
   </modules>
 
   <scm>
@@ -48,7 +52,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-    <maven.compiler.release>11</maven.compiler.release>
+    <maven.compiler.release>17</maven.compiler.release>
     <maven.compiler.failOnWarning>true</maven.compiler.failOnWarning>
     <maven.dependency.failOnWarning>true</maven.dependency.failOnWarning>
     <project.build.outputTimestamp>2026-10-19T13:28:26Z</project.build.outputTimestamp>
@@ -74,6 +78,7 @@
     <!-- runtime versions -->
     <endive.version>1.1.0</endive.version>
     <jackson.version>2.22.4</jackson.version>
+    <jackson3.version>3.1.8</jackson3.version>
     <javaparser.version>3.28.2</javaparser.version>
   </properties>
 
@@ -106,7 +111,7 @@
           <version>${maven-compiler-plugin.version}</version>
           <configuration>
             <parameters>true</parameters>
-            <release>11</release>
+            <release>${maven.compiler.release}</release>
           </configuration>
         </plugin>
         <plugin>
@@ -125,31 +130,20 @@
 
   <profiles>
     <profile>
-      <id>java11</id>
+      <!-- Checkstyle 14 and google-java-format 1.35 need Java 21 -->
+      <id>pre-java21</id>
       <activation>
-        <jdk>11</jdk>
+        <jdk>[17,21)</jdk>
       </activation>
       <properties>
         <checkstyle.skip>true</checkstyle.skip>
       </properties>
-      <build>
-        <plugins>
-          <!-- disable Error Prone -->
-          <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-compiler-plugin</artifactId>
-            <configuration>
-              <compilerArgs combine.self="override"/>
-            </configuration>
-          </plugin>
-        </plugins>
-      </build>
     </profile>
 
     <profile>
-      <id>java17</id>
+      <id>java21</id>
       <activation>
-        <jdk>[17,)</jdk>
+        <jdk>[21,)</jdk>
       </activation>
       <build>
         <plugins>
@@ -306,7 +300,6 @@
         </plugins>
       </build>
     </profile>
-
     <profile>
       <id>release</id>
       <build>

@@ -1,15 +1,13 @@
 package io.roastedroot.quickjs4j.core;
 
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.BiFunction;
-import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Supplier;
 
+/** A JS module ({@code globalThis.<moduleName>}) of Java functions callable from JS. */
 public final class Builtins {
     private final String moduleName;
     private final Map<String, HostFunction> functions;
@@ -37,21 +35,21 @@ public final class Builtins {
 
     public static final class Builder {
         private final String moduleName;
-        private List<HostFunction> functions = new ArrayList<>();
+        private final Map<String, HostFunction> functions = new LinkedHashMap<>();
 
         private Builder(String moduleName) {
-            this.moduleName = moduleName;
+            this.moduleName = Identifiers.check(moduleName, "module");
         }
 
         public Builder add(HostFunction fun) {
-            if (functions.contains(fun.name())) {
+            if (functions.containsKey(fun.name())) {
                 throw new IllegalArgumentException(
                         "A function with name: "
                                 + fun.name()
                                 + " is already defined in the module: "
                                 + moduleName);
             }
-            functions.add(fun);
+            functions.put(fun.name(), fun);
             return this;
         }
 
@@ -62,112 +60,13 @@ public final class Builtins {
             return this;
         }
 
-        public Builder addIntIntToInt(String name, BiFunction<Integer, Integer, Integer> fn) {
-            return add(
-                    new HostFunction(
-                            name,
-                            List.of(Integer.class, Integer.class),
-                            Integer.class,
-                            (args) -> fn.apply((Integer) args.get(0), (Integer) args.get(1))));
-        }
-
-        public Builder addVoidToInt(String name, Supplier<Integer> fn) {
-            return add(
-                    new HostFunction(
-                            name,
-                            List.of(),
-                            Integer.class,
-                            (args) -> {
-                                return fn.get();
-                            }));
-        }
-
-        public Builder addVoidToString(String name, Supplier<String> fn) {
-            return add(
-                    new HostFunction(
-                            name,
-                            List.of(),
-                            String.class,
-                            (args) -> {
-                                return fn.get();
-                            }));
-        }
-
-        public Builder addIntToVoid(String name, Consumer<Integer> fn) {
-            return add(
-                    new HostFunction(
-                            name,
-                            List.of(Integer.class),
-                            Void.class,
-                            (args) -> {
-                                fn.accept((Integer) args.get(0));
-                                return null;
-                            }));
-        }
-
-        public Builder addVoidToVoid(String name, Runnable fn) {
-            return add(
-                    new HostFunction(
-                            name,
-                            List.of(),
-                            Void.class,
-                            (args) -> {
-                                fn.run();
-                                return null;
-                            }));
-        }
-
-        public Builder addIntToString(String name, Function<Integer, String> fn) {
-            return add(
-                    new HostFunction(
-                            name,
-                            List.of(Integer.class),
-                            String.class,
-                            (args) -> {
-                                return fn.apply((Integer) args.get(0));
-                            }));
-        }
-
-        public Builder addStringToInt(String name, Function<String, Integer> fn) {
-            return add(
-                    new HostFunction(
-                            name,
-                            List.of(String.class),
-                            Integer.class,
-                            (args) -> {
-                                return fn.apply((String) args.get(0));
-                            }));
-        }
-
-        public Builder addStringToString(String name, Function<String, String> fn) {
-            return add(
-                    new HostFunction(
-                            name,
-                            List.of(String.class),
-                            String.class,
-                            (args) -> {
-                                return fn.apply((String) args.get(0));
-                            }));
-        }
-
-        public Builder addStringToVoid(String name, Consumer<String> fn) {
-            return add(
-                    new HostFunction(
-                            name,
-                            List.of(String.class),
-                            Integer.class,
-                            (args) -> {
-                                fn.accept((String) args.get(0));
-                                return null;
-                            }));
+        public Builder add(String name, Function<List<String>, String> fn) {
+            return add(new HostFunction(name, fn));
         }
 
         public Builtins build() {
-            var finalFuncs = new HashMap<String, HostFunction>();
-            for (HostFunction func : functions) {
-                finalFuncs.put(func.name(), func);
-            }
-            return new Builtins(moduleName, finalFuncs);
+            return new Builtins(
+                    moduleName, Collections.unmodifiableMap(new LinkedHashMap<>(functions)));
         }
     }
 }
