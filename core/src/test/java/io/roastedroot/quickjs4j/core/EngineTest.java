@@ -508,8 +508,74 @@ public class EngineTest {
                         + "  return 42;\n"
                         + "}\n";
 
-        try (var engine = Engine.builder().addInvokables(invokables).build()) {
-            assertEquals("42", engine.invokeGuestFunction("from_js", "hide", List.of(), code));
+        for (var jsGlobals : new boolean[] {true, false}) {
+            try (var engine =
+                    Engine.builder().addInvokables(invokables).withJsGlobals(jsGlobals).build()) {
+                assertEquals("42", engine.invokeGuestFunction("from_js", "hide", List.of(), code));
+            }
+        }
+    }
+
+    @Test
+    public void guestFunctionsWithoutJsGlobals() {
+        var invokables = Invokables.builder("from_js").add("add").add("twice").build();
+        var code =
+                "function add(a, b) { return a + b; }\n"
+                        + "async function twice(x) { return await Promise.resolve(x * 2); }\n";
+
+        try (var engine = Engine.builder().addInvokables(invokables).withJsGlobals(false).build()) {
+            assertEquals(
+                    "5", engine.invokeGuestFunction("from_js", "add", List.of("2", "3"), code));
+            assertEquals("42", engine.invokeGuestFunction("from_js", "twice", List.of("21"), code));
+            var compiled = engine.compilePortableGuestFunction(code);
+            assertEquals(
+                    "7",
+                    engine.invokePrecompiledGuestFunction(
+                            "from_js", "add", List.of("3", "4"), compiled));
+        }
+    }
+
+    @Test
+    public void withoutJsGlobalsNothingIsGenerated() {
+        var builtins = Builtins.builder("from_java").add("shout", args -> args.get(0)).build();
+        var invokables = Invokables.builder("from_js").add("probe").build();
+        var code =
+                "function probe() {\n"
+                        + "  return [typeof quickjs4j_engine, typeof globalThis.from_js,"
+                        + " typeof globalThis.from_java];\n"
+                        + "}\n";
+
+        try (var engine =
+                Engine.builder().addBuiltins(builtins).addInvokables(invokables).build()) {
+            assertEquals(
+                    "[\"object\",\"object\",\"object\"]",
+                    engine.invokeGuestFunction("from_js", "probe", List.of(), code));
+        }
+        try (var engine =
+                Engine.builder()
+                        .addBuiltins(builtins)
+                        .addInvokables(invokables)
+                        .withJsGlobals(false)
+                        .build()) {
+            assertEquals(0, engine.jsPreludeLineCount());
+            assertEquals(
+                    "[\"undefined\",\"undefined\",\"undefined\"]",
+                    engine.invokeGuestFunction("from_js", "probe", List.of(), code));
+        }
+    }
+
+    @Test
+    public void withoutJsGlobalsBuiltinsAreReachedThroughJavaInvoke() {
+        var builtins = Builtins.builder("from_java").add("shout", args -> args.get(0)).build();
+
+        try (var engine = Engine.builder().addBuiltins(builtins).withJsGlobals(false).build()) {
+            compileAndExec(
+                    engine,
+                    "console.log(JSON.parse(java_invoke(\"from_java\", \"shout\","
+                            + " JSON.stringify([\"x\"]))));");
+            assertEquals("x\n", engine.stdout());
+            assertThrows(
+                    GuestException.class, () -> compileAndExec(engine, "from_java.shout(\"x\");"));
         }
     }
 

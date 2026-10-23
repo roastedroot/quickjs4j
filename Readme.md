@@ -166,6 +166,29 @@ try (var myTestModule = new MyJsTestModule()) {
 }
 ```
 
+### Generated globals
+
+By default the engine adds JavaScript around your code: a `globalThis.<module>.<function>` wrapper for every builtin, and a `globalThis.<module>.<function>` export for every guest function.
+Embedders that build their own JavaScript API, or don't want those globals visible to scripts, can turn them off:
+
+```java
+var engine =
+    Engine.builder()
+          .addBuiltins(builtins)
+          .addInvokables(invokables)
+          .withJsGlobals(false)
+          .build();
+```
+
+Guest functions are still invoked from Java as usual.
+Builtins are then reached through the host bridge, which takes and returns JSON text:
+
+```javascript
+const result = JSON.parse(java_invoke("from_java", "my_java_func", JSON.stringify([40, 2])));
+```
+
+`java_invoke` itself is always a global, so this is not a sandboxing boundary.
+
 ## High Level API
 
 An higher level API is exposed for convenience to wrap everything up for the most common use cases.

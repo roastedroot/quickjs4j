@@ -70,7 +70,8 @@ public final class Engine implements AutoCloseable {
             Logger logger,
             ByteArrayOutputStream stdout,
             ByteArrayOutputStream stderr,
-            long gcThreshold) {
+            long gcThreshold,
+            boolean jsGlobals) {
         this.builtins = builtins;
         this.cache = cache;
         this.stdout = stdout;
@@ -122,8 +123,13 @@ public final class Engine implements AutoCloseable {
                         .build();
         exports = new Engine_ModuleExports(instance);
         exports.initializeRuntime(gcThreshold);
-        buildJsPrelude();
-        buildJsSuffix();
+        if (jsGlobals) {
+            buildJsPrelude();
+            buildJsSuffix();
+        } else {
+            jsPrelude = "";
+            jsSuffix = "";
+        }
         buildJsEpilogue();
     }
 
@@ -618,6 +624,7 @@ public final class Engine implements AutoCloseable {
         private ByteArrayOutputStream stdout;
         private ByteArrayOutputStream stderr;
         private long gcThreshold = DEFAULT_GC_THRESHOLD;
+        private boolean jsGlobals = true;
 
         private Builder() {}
 
@@ -668,6 +675,12 @@ public final class Engine implements AutoCloseable {
             return this;
         }
 
+        /** {@code false} skips the generated {@code globalThis.<module>.<fn>} wrappers. */
+        public Builder withJsGlobals(boolean jsGlobals) {
+            this.jsGlobals = jsGlobals;
+            return this;
+        }
+
         public Engine build() {
             if (memoryFactory == null) {
                 memoryFactory = ByteArrayMemory::new;
@@ -702,7 +715,8 @@ public final class Engine implements AutoCloseable {
                     logger,
                     stdout,
                     stderr,
-                    gcThreshold);
+                    gcThreshold,
+                    jsGlobals);
         }
     }
 }
