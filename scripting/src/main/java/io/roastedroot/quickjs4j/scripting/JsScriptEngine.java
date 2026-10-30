@@ -1,12 +1,14 @@
 package io.roastedroot.quickjs4j.scripting;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import io.roastedroot.quickjs4j.binding.Binding;
+import io.roastedroot.quickjs4j.binding.JsonCodec;
+import io.roastedroot.quickjs4j.binding.JsonCodecException;
+import io.roastedroot.quickjs4j.binding.JsonCodecs;
+import io.roastedroot.quickjs4j.binding.TypedGuestFunction;
+import io.roastedroot.quickjs4j.binding.TypedRunner;
 import io.roastedroot.quickjs4j.core.BasicScriptCache;
 import io.roastedroot.quickjs4j.core.Engine;
 import io.roastedroot.quickjs4j.core.GuestException;
-import io.roastedroot.quickjs4j.core.GuestFunction;
-import io.roastedroot.quickjs4j.core.Invokables;
 import io.roastedroot.quickjs4j.core.Runner;
 import io.roastedroot.quickjs4j.core.ScriptCache;
 import java.io.IOException;
@@ -37,9 +39,8 @@ public class JsScriptEngine extends AbstractScriptEngine
                     + "  return (0, eval)(script);\n"
                     + "}";
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
-
-    private final Runner runner;
+    private final Binding binding;
+    private final TypedRunner runner;
     private int lastStdoutLength;
     private int lastStderrLength;
 
@@ -48,19 +49,23 @@ public class JsScriptEngine extends AbstractScriptEngine
     }
 
     public JsScriptEngine(ScriptCache cache) {
+        this(cache, JsonCodecs.discover());
+    }
+
+    public JsScriptEngine(ScriptCache cache, JsonCodec codec) {
+        this.binding = Binding.create(codec);
         var engine =
                 Engine.builder()
                         .withCache(cache)
                         .addInvokables(
-                                Invokables.builder("quickjs4jScripting")
-                                        .add(
-                                                new GuestFunction(
-                                                        "quickjsEval",
-                                                        List.of(Object.class, String.class),
-                                                        Object.class))
-                                        .build())
+                                binding.invokables(
+                                        "quickjs4jScripting",
+                                        new TypedGuestFunction(
+                                                "quickjsEval",
+                                                List.of(Object.class, String.class),
+                                                Object.class)))
                         .build();
-        this.runner = Runner.builder().withEngine(engine).build();
+        this.runner = binding.bind(Runner.builder().withEngine(engine).build());
     }
 
     @Override
@@ -201,7 +206,7 @@ public class JsScriptEngine extends AbstractScriptEngine
     }
 
     private void handleOutput(ScriptContext context) {
-        String stdout = runner.stdout();
+        String stdout = runner.runner().stdout();
         if (stdout != null && stdout.length() > lastStdoutLength) {
             String newOutput = stdout.substring(lastStdoutLength);
             lastStdoutLength = stdout.length();
@@ -216,7 +221,7 @@ public class JsScriptEngine extends AbstractScriptEngine
             }
         }
 
-        String stderr = runner.stderr();
+        String stderr = runner.runner().stderr();
         if (stderr != null && stderr.length() > lastStderrLength) {
             String newOutput = stderr.substring(lastStderrLength);
             lastStderrLength = stderr.length();
@@ -273,9 +278,13 @@ public class JsScriptEngine extends AbstractScriptEngine
                 if (i > 0) {
                     sb.append(", ");
                 }
+                if (args[i] == null) {
+                    sb.append("null");
+                    continue;
+                }
                 try {
-                    sb.append(MAPPER.writeValueAsString(args[i]));
-                } catch (JsonProcessingException e) {
+                    sb.append(binding.codec().toJson(args[i], Object.class));
+                } catch (JsonCodecException e) {
                     throw new ScriptException("Failed to serialize argument: " + e.getMessage());
                 }
             }

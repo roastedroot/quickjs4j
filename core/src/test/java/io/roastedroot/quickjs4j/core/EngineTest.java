@@ -1,334 +1,367 @@
 package io.roastedroot.quickjs4j.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.opentest4j.AssertionFailedError;
 
 public class EngineTest {
+    private static final String LINE_SEPARATORS = new String(new char[] {0x2028, 0x2029});
+
+    // JSON.stringify output for a string
+    static String json(String str) {
+        var sb = new StringBuilder("\"");
+        for (char c : str.toCharArray()) {
+            switch (c) {
+                case '"':
+                    sb.append("\\\"");
+                    break;
+                case '\\':
+                    sb.append("\\\\");
+                    break;
+                case '\n':
+                    sb.append("\\n");
+                    break;
+                case '\r':
+                    sb.append("\\r");
+                    break;
+                case '\t':
+                    sb.append("\\t");
+                    break;
+                case '\b':
+                    sb.append("\\b");
+                    break;
+                case '\f':
+                    sb.append("\\f");
+                    break;
+                default:
+                    if (c < 0x20) {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+            }
+        }
+        return sb.append('"').toString();
+    }
+
+    static void compileAndExec(Engine engine, String code) {
+        var codePtr = engine.compile(code);
+        try {
+            engine.exec(codePtr);
+        } finally {
+            engine.free(codePtr);
+        }
+    }
+
+    static String library() throws Exception {
+        return new String(
+                EngineTest.class.getResourceAsStream("/library/dist/out.js").readAllBytes(),
+                StandardCharsets.UTF_8);
+    }
+
+    static Builtins logBuiltins() {
+        return Builtins.builder("java_api")
+                .add(
+                        "log",
+                        args -> {
+                            System.out.println("LOG - " + args.get(0));
+                            return args.get(0);
+                        })
+                .build();
+    }
 
     @Test
     public void basicUsage() {
-        // Arrange
         var invoked = new AtomicBoolean(false);
         var builtins =
                 Builtins.builder("from_java")
-                        .addStringToString(
+                        .add(
                                 "imported_function",
-                                (str) -> {
-                                    assertEquals("ciao", str);
+                                args -> {
+                                    assertEquals(List.of(json("ciao")), args);
                                     invoked.set(true);
-                                    return "{ received: " + str + " }";
+                                    return json("{ received: ciao }");
                                 })
                         .build();
-        var engine = Engine.builder().addBuiltins(builtins).build();
+        try (var engine = Engine.builder().addBuiltins(builtins).build()) {
+            compileAndExec(
+                    engine,
+                    "console.log(\"hello js world!!!\");"
+                            + " console.error(from_java.imported_function(\"ciao\"));");
+            assertEquals("{ received: ciao }\n", engine.stderr());
+        }
 
-        // Act
-        var codePtr =
-                engine.compile(
-                        "console.log(\"hello js world!!!\");"
-                                + " console.error(from_java.imported_function(\"ciao\"));");
-        engine.exec(codePtr);
-        engine.free(codePtr);
-        engine.close();
-
-        // Assert
         assertTrue(invoked.get());
     }
 
-    public static int add(int a, int b) {
-        return a + b;
-    }
+    @Test
+    public void callJavaFunctionsFromDifferentModules() {
+        var result = new AtomicReference<String>();
+        var calculator =
+                Builtins.builder("calculator")
+                        .add(
+                                "add",
+                                args ->
+                                        Integer.toString(
+                                                Integer.parseInt(args.get(0))
+                                                        + Integer.parseInt(args.get(1))))
+                        .build();
+        var check =
+                Builtins.builder("from_java")
+                        .add(
+                                "check",
+                                args -> {
+                                    result.set(args.get(0));
+                                    return null;
+                                })
+                        .build();
 
-    public static Consumer<Integer> check(int expected) {
-        return (v) -> assertEquals(expected, v);
+        try (var engine = Engine.builder().addBuiltins(calculator).addBuiltins(check).build()) {
+            compileAndExec(engine, "from_java.check(calculator.add(40, 2));");
+        }
+
+        assertEquals("42", result.get());
     }
 
     @Test
-    public void callJavaFunctionsFromJS() {
-        var builtins = Builtins.builder("java").addIntIntToInt("add", EngineTest::add).build();
+    public void argumentsAreOneJsonTextEach() {
+        var received = new AtomicReference<List<String>>();
+        var builtins =
+                Builtins.builder("from_java")
+                        .add(
+                                "f",
+                                args -> {
+                                    received.set(args);
+                                    return null;
+                                })
+                        .build();
 
-        var engine = Engine.builder().build().builder().addBuiltins(builtins).build();
+        try (var engine = Engine.builder().addBuiltins(builtins).build()) {
+            compileAndExec(
+                    engine,
+                    "from_java.f(1, 2.5, \"str\", true, null, [1, [2]], {\"k\": {\"n\": 1}});");
+            assertEquals(
+                    List.of(
+                            "1",
+                            "2.5",
+                            json("str"),
+                            "true",
+                            "null",
+                            "[1,[2]]",
+                            "{\"k\":{\"n\":1}}"),
+                    received.get());
 
-        var codePtr = engine.compile("java.add(40, 1);");
-        engine.exec(codePtr);
-        engine.free(codePtr);
-        engine.close();
+            compileAndExec(engine, "from_java.f();");
+            assertEquals(List.of(), received.get());
+
+            compileAndExec(engine, "from_java.f(undefined, () => 1, Symbol(\"s\"));");
+            assertEquals(List.of("null", "null", "null"), received.get());
+        }
     }
 
     @Test
-    public void callJavaFunctionsFromDifferentBundlesFromJS() {
-        var calculatorBuiltins =
-                Builtins.builder("calculator").addIntIntToInt("add", EngineTest::add).build();
-        var checkBuiltins =
-                Builtins.builder("from_java").addIntToVoid("check", EngineTest.check(42)).build();
+    public void specialCharactersStayInsideArguments() {
+        var received = new AtomicReference<List<String>>();
+        var builtins =
+                Builtins.builder("from_java")
+                        .add(
+                                "f",
+                                args -> {
+                                    received.set(args);
+                                    return null;
+                                })
+                        .build();
+        var tricky =
+                List.of(
+                        "a,b]c}d[e{",
+                        "line\nbreak",
+                        "tab\tquote\"back\\slash\\",
+                        "\u001e",
+                        LINE_SEPARATORS,
+                        "😀");
 
-        var engine =
-                Engine.builder().addBuiltins(calculatorBuiltins).addBuiltins(checkBuiltins).build();
+        try (var engine = Engine.builder().addBuiltins(builtins).build()) {
+            compileAndExec(
+                    engine,
+                    "from_java.f(\"a,b]c}d[e{\", \"line\\nbreak\","
+                            + " \"tab\\tquote\\\"back\\\\slash\\\\\", \"\\x1e\","
+                            + " \"\\u2028\\u2029\", \"😀\", [\"]\", {\"k\": \"}\\\"\"}]);");
+        }
 
-        var codePtr = engine.compile("from_java.check(calculator.add(40, 2));");
-        engine.exec(codePtr);
-        engine.free(codePtr);
-        engine.close();
+        var expected = new ArrayList<String>();
+        for (var str : tricky) {
+            expected.add(json(str));
+        }
+        expected.add("[" + json("]") + ",{" + json("k") + ":" + json("}\"") + "}]");
+        assertEquals(expected, received.get());
+    }
+
+    @Test
+    public void splitArgs() {
+        assertEquals(List.of(), Engine.splitArgs("[]"));
+        assertEquals(List.of(), Engine.splitArgs(" [ \n ] "));
+        assertEquals(List.of("1"), Engine.splitArgs("[1]"));
+        assertEquals(
+                List.of("1", "\"a,]\\\"\"", "{\"b\": [2, {\"c\": \"}\"}]}", "null"),
+                Engine.splitArgs("[ 1 ,\"a,]\\\"\",\n{\"b\": [2, {\"c\": \"}\"}]} , null ]"));
+        // element contents are left to the codec to validate
+        assertEquals(List.of("{]", "1 2", "nope"), Engine.splitArgs("[{],1 2,nope]"));
+
+        for (var malformed :
+                List.of(
+                        "",
+                        "1",
+                        "[",
+                        "]",
+                        "[1",
+                        "1]",
+                        "[1,]",
+                        "[,1]",
+                        "[1,,2]",
+                        "[\"open]",
+                        "[1]]",
+                        "[[1]",
+                        "[}]")) {
+            var ex =
+                    assertThrows(
+                            IllegalArgumentException.class,
+                            () -> Engine.splitArgs(malformed),
+                            malformed);
+            assertTrue(ex.getMessage().startsWith("Malformed host function arguments"));
+        }
+    }
+
+    @Test
+    public void returnedJsonIsParsedInJs() {
+        var received = new AtomicReference<List<String>>();
+        var builtins =
+                Builtins.builder("from_java")
+                        .add("obj", args -> "{\"a\":[1,\"two\"],\"b\":null}")
+                        .add("nothing", args -> null)
+                        .add(
+                                "check",
+                                args -> {
+                                    received.set(args);
+                                    return null;
+                                })
+                        .build();
+
+        try (var engine = Engine.builder().addBuiltins(builtins).build()) {
+            compileAndExec(
+                    engine,
+                    "const o = from_java.obj();"
+                            + " from_java.check(o.a[1], o.b, from_java.nothing());");
+        }
+
+        assertEquals(List.of(json("two"), "null", "null"), received.get());
+    }
+
+    @Test
+    public void rawJavaInvokeText() {
+        var received = new AtomicReference<List<String>>();
+        var builtins =
+                Builtins.builder("from_java")
+                        .add(
+                                "f",
+                                args -> {
+                                    received.set(args);
+                                    return "1";
+                                })
+                        .build();
+
+        try (var engine = Engine.builder().addBuiltins(builtins).build()) {
+            compileAndExec(engine, "java_invoke(\"from_java\", \"f\", \"[ not, json ]\");");
+            assertEquals(List.of("not", "json"), received.get());
+
+            var ex =
+                    assertThrows(
+                            IllegalArgumentException.class,
+                            () ->
+                                    compileAndExec(
+                                            engine,
+                                            "java_invoke(\"from_java\", \"f\", \"not json\");"));
+            assertTrue(ex.getMessage().contains("Malformed host function arguments"));
+        }
+    }
+
+    @Test
+    public void unknownHostFunction() {
+        try (var engine = Engine.builder().build()) {
+            var ex =
+                    assertThrows(
+                            IllegalArgumentException.class,
+                            () -> compileAndExec(engine, "java_invoke(\"nope\", \"f\", \"[]\");"));
+            assertTrue(ex.getMessage().contains("nope"));
+        }
+    }
+
+    @Test
+    public void largePayloadRoundTrip() {
+        var received = new AtomicReference<String>();
+        var builtins =
+                Builtins.builder("from_java")
+                        .add("echo", args -> args.get(0))
+                        .add(
+                                "check",
+                                args -> {
+                                    received.set(args.get(0));
+                                    return null;
+                                })
+                        .build();
+
+        try (var engine = Engine.builder().addBuiltins(builtins).build()) {
+            compileAndExec(
+                    engine,
+                    "const big = \"x,\\\"]\".repeat(500000);"
+                            + " from_java.check(from_java.echo(big) === big);");
+        }
+
+        assertEquals("true", received.get());
+    }
+
+    @Test
+    public void invalidNamesAreRejected() {
+        assertThrows(IllegalArgumentException.class, () -> Builtins.builder("bad-module"));
+        assertThrows(IllegalArgumentException.class, () -> Invokables.builder("1module"));
+        assertThrows(IllegalArgumentException.class, () -> new HostFunction("a\"b", args -> null));
+        assertThrows(IllegalArgumentException.class, () -> new GuestFunction("f", "a b"));
+        assertThrows(IllegalArgumentException.class, () -> new GuestFunction(""));
+    }
+
+    @Test
+    public void duplicateNamesAreRejected() {
+        var builtins = Builtins.builder("from_java").add("f", args -> null);
+        assertThrows(IllegalArgumentException.class, () -> builtins.add("f", args -> null));
+
+        var invokables = Invokables.builder("from_js").add("f");
+        assertThrows(IllegalArgumentException.class, () -> invokables.add("f"));
     }
 
     @Test
     public void callJavaFunctionsFromJSNegativeCheck() {
         var builtins =
                 Builtins.builder("from_java")
-                        .addIntIntToInt("add", EngineTest::add)
-                        .addIntToVoid("check", EngineTest.check(43))
-                        .build();
-
-        var engine = Engine.builder().addBuiltins(builtins).build();
-
-        var codePtr = engine.compile("from_java.check(from_java.add(40, 2));");
-
-        assertThrows(AssertionError.class, () -> engine.exec(codePtr));
-        engine.free(codePtr);
-        engine.close();
-    }
-
-    boolean func1Called;
-
-    void func1() {
-        func1Called = true;
-    }
-
-    int func2Called;
-
-    void func2(int a) {
-        func2Called = a;
-    }
-
-    String func3Called;
-
-    void func3(String a) {
-        func3Called = a;
-    }
-
-    String func4Called;
-
-    String func4() {
-        func4Called = "func4";
-        return func4Called;
-    }
-
-    int func5Called;
-
-    String func5(int a) {
-        func5Called = a;
-        return "funcS" + a;
-    }
-
-    String func6Called;
-
-    String func6(String a) {
-        func6Called = a;
-        return "funcS" + a;
-    }
-
-    static void compileAndExec(Engine jsRunner, String code) {
-        var codePtr = jsRunner.compile(code);
-        jsRunner.exec(codePtr);
-        jsRunner.free(codePtr);
-        jsRunner.close();
-    }
-
-    @Test
-    public void callJavaFunctionsFromJSWithDifferentParamsAndReturns() {
-        final AtomicReference<String> toCheck = new AtomicReference<>();
-        var builtins =
-                Builtins.builder("from_java")
-                        .addVoidToVoid("func1", this::func1)
-                        .addIntToVoid("func2", this::func2)
-                        .addStringToVoid("func3", this::func3)
-                        .addVoidToString("func4", this::func4)
-                        .addIntToString("func5", this::func5)
-                        .addStringToString("func6", this::func6)
-                        .addStringToVoid("check", str -> assertEquals(toCheck.get(), str))
-                        .build();
-
-        var engine = Engine.builder().addBuiltins(builtins).build();
-
-        compileAndExec(engine, "from_java.func1();");
-        assertTrue(func1Called);
-
-        compileAndExec(engine, "from_java.func2(10);");
-        assertEquals(10, func2Called);
-
-        compileAndExec(engine, "from_java.func3(\"h3110\");");
-        assertEquals("h3110", func3Called);
-
-        toCheck.set("func4");
-        compileAndExec(engine, "from_java.check(from_java.func4());");
-        assertEquals("func4", func4Called);
-
-        compileAndExec(engine, "from_java.func5(11);");
-        assertEquals(11, func5Called);
-
-        // negative - needs to be last as the runtime needs a restart after exception
-        toCheck.set("myFunc");
-        assertThrows(
-                AssertionFailedError.class,
-                () -> compileAndExec(engine, "from_java.check(from_java.func4());"));
-    }
-
-    @Test
-    public void callJavaFunctionsWithMixedParameters() {
-        var expectedX = 123;
-        var expectedY = "hello my world";
-        var expectedZ = 321;
-        var builtins =
-                Builtins.builder("from_java")
                         .add(
-                                new HostFunction(
-                                        "myFunc",
-                                        List.of(Integer.class, String.class, Integer.class),
-                                        Void.class,
-                                        (args) -> {
-                                            var x = (Integer) args.get(0);
-                                            var y = (String) args.get(1);
-                                            var z = (Integer) args.get(2);
-
-                                            assertEquals(expectedX, x);
-                                            assertEquals(expectedY, y);
-                                            assertEquals(expectedZ, z);
-                                            return null;
-                                        }))
+                                "check",
+                                args -> {
+                                    assertEquals("43", args.get(0));
+                                    return null;
+                                })
                         .build();
 
-        var engine = Engine.builder().addBuiltins(builtins).build();
-
-        compileAndExec(
-                engine,
-                String.format(
-                        "from_java.myFunc(%d, \"%s\", %d);", expectedX, expectedY, expectedZ));
-    }
-
-    private static class User {
-        final String name;
-        final String surname;
-        final int age;
-
-        public User(String name, String surname, int age) {
-            this.name = name;
-            this.surname = surname;
-            this.age = age;
+        try (var engine = Engine.builder().addBuiltins(builtins).build()) {
+            assertThrows(
+                    AssertionFailedError.class,
+                    () -> compileAndExec(engine, "from_java.check(42);"));
         }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) {
-                return true;
-            }
-            if (!(o instanceof User)) {
-                return false;
-            }
-            User user = (User) o;
-            return age == user.age
-                    && Objects.equals(name, user.name)
-                    && Objects.equals(surname, user.surname);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(name, surname, age);
-        }
-    }
-
-    @Test
-    public void callJavaFunctionsUsingJavaRefs() {
-        var expectedUser = new User("alice", "bobstrom", 23);
-        var builtins =
-                Builtins.builder("from_java")
-                        .add(
-                                new HostFunction(
-                                        "getUser",
-                                        List.of(String.class, String.class, Integer.class),
-                                        HostRef.class,
-                                        (args) -> {
-                                            var name = (String) args.get(0);
-                                            var surname = (String) args.get(1);
-                                            var age = (Integer) args.get(2);
-
-                                            return new User(name, surname, age);
-                                        }))
-                        .add(
-                                new HostFunction(
-                                        "checkUser",
-                                        List.of(HostRef.class),
-                                        Void.class,
-                                        (args) -> {
-                                            var user = (User) args.get(0);
-
-                                            assertEquals(expectedUser, user);
-                                            return null;
-                                        }))
-                        .build();
-
-        var engine = Engine.builder().addBuiltins(builtins).build();
-
-        compileAndExec(
-                engine,
-                String.format(
-                        "const user = from_java.getUser(\"%s\", \"%s\", %d);\n"
-                                + "from_java.checkUser(user);",
-                        expectedUser.name, expectedUser.surname, expectedUser.age));
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
-    public void hostRefArray() {
-        var received = new AtomicReference<>();
-        var builtins =
-                Builtins.builder("from_java")
-                        .add(
-                                new HostFunction(
-                                        "create",
-                                        List.of(Integer.class, Integer.class),
-                                        HostRef.class,
-                                        (args) -> {
-                                            var x = (Integer) args.get(0);
-                                            var y = (Integer) args.get(1);
-                                            return new Point(x, y);
-                                        }))
-                        .add(
-                                new HostFunction(
-                                        "check_refs",
-                                        List.of(HostRef.class),
-                                        Void.class,
-                                        (args) -> {
-                                            received.set(args.get(0));
-                                            return null;
-                                        }))
-                        .build();
-
-        var engine = Engine.builder().addBuiltins(builtins).build();
-
-        compileAndExec(
-                engine,
-                "const p1 = from_java.create(10, 20);\n"
-                        + "const p2 = from_java.create(30, 40);\n"
-                        + "from_java.check_refs([p1, p2]);\n");
-
-        var refs = (List<Object>) received.get();
-        assertEquals(2, refs.size());
-        assertEquals(new Point(10, 20), refs.get(0));
-        assertEquals(new Point(30, 40), refs.get(1));
     }
 
     @Test
@@ -342,553 +375,341 @@ public class EngineTest {
                         + "            (__)\\       )\\/\\\n"
                         + "                ||----w |\n"
                         + "                ||     ||";
+        var checked = new AtomicBoolean(false);
         var builtins =
                 Builtins.builder("from_java")
-                        .addVoidToString("java_text", () -> "my Moooodule")
-                        .addStringToVoid("java_check", (str) -> assertEquals(myCow, str))
+                        .add("java_text", args -> json("my Moooodule"))
+                        .add(
+                                "java_check",
+                                args -> {
+                                    assertEquals(json(myCow), args.get(0));
+                                    checked.set(true);
+                                    return null;
+                                })
                         .build();
-        var engine = Engine.builder().addBuiltins(builtins).build();
-
         var jsSource =
                 new String(
                         EngineTest.class.getResourceAsStream("/cowsay/dist/out.js").readAllBytes(),
                         StandardCharsets.UTF_8);
 
-        compileAndExec(engine, jsSource);
-    }
+        try (var engine = Engine.builder().addBuiltins(builtins).build()) {
+            compileAndExec(engine, jsSource);
+        }
 
-    public static class ZodResult {
-        @JsonProperty("success")
-        boolean success;
-
-        @JsonProperty("data")
-        String data;
-
-        @JsonProperty("error")
-        ZodError error;
-    }
-
-    public static class ZodError {
-        @JsonProperty("name")
-        String name;
-
-        @JsonProperty("issues")
-        ZodIssue[] issues;
-    }
-
-    public static class ZodIssue {
-        @JsonProperty("code")
-        String code;
-
-        @JsonProperty("path")
-        String[] path;
-
-        @JsonProperty("expected")
-        String expected;
-
-        @JsonProperty("received")
-        String received;
-
-        @JsonProperty("message")
-        String message;
-    }
-
-    @Test
-    public void useBundledTS() throws Exception {
-        var builtins =
-                Builtins.builder("from_java")
-                        .add(
-                                new HostFunction(
-                                        "java_check_tuna",
-                                        List.of(ZodResult.class),
-                                        Void.class,
-                                        (args) -> {
-                                            ZodResult res = (ZodResult) args.get(0);
-
-                                            assertTrue(res.success);
-                                            assertEquals("tuna", res.data);
-
-                                            return null;
-                                        }))
-                        .add(
-                                new HostFunction(
-                                        "java_check_number",
-                                        List.of(ZodResult.class),
-                                        Void.class,
-                                        (args) -> {
-                                            ZodResult res = (ZodResult) args.get(0);
-
-                                            assertFalse(res.success);
-                                            assertEquals("invalid_type", res.error.issues[0].code);
-                                            assertEquals("number", res.error.issues[0].received);
-                                            assertEquals("string", res.error.issues[0].expected);
-
-                                            return null;
-                                        }))
-                        .build();
-        var engine = Engine.builder().addBuiltins(builtins).build();
-
-        var jsSource = EngineTest.class.getResourceAsStream("/zod/dist/out.js").readAllBytes();
-
-        var codePtr = engine.compile(jsSource);
-        engine.exec(codePtr);
-        engine.free(codePtr);
-        engine.close();
+        assertTrue(checked.get());
     }
 
     @Test
     public void useRawBundledLibrary() throws Exception {
-        AtomicInteger result = new AtomicInteger();
-
+        var result = new AtomicReference<String>();
         var builtins =
                 Builtins.builder("java_api")
                         .add(
-                                new HostFunction(
-                                        "setResult",
-                                        List.of(Integer.class),
-                                        Void.class,
-                                        (args) -> {
-                                            result.set((Integer) args.get(0));
-                                            return null;
-                                        }),
-                                new HostFunction(
-                                        "log",
-                                        List.of(String.class),
-                                        String.class,
-                                        (args) -> {
-                                            String str = (String) args.get(0);
-
-                                            System.out.println("LOG - " + str);
-                                            return str;
-                                        }))
+                                "setResult",
+                                args -> {
+                                    result.set(args.get(0));
+                                    return null;
+                                })
+                        .add("log", args -> args.get(0))
                         .build();
-        var engine = Engine.builder().addBuiltins(builtins).build();
 
-        var jsLibrarySource =
-                EngineTest.class.getResourceAsStream("/library/dist/out.js").readAllBytes();
+        try (var engine = Engine.builder().addBuiltins(builtins).build()) {
+            compileAndExec(
+                    engine,
+                    library()
+                            + "\nglobalThis.jsFunctions = {};"
+                            + "\nglobalThis.jsFunctions.calculator = { add };");
+            compileAndExec(engine, "java_api.setResult(jsFunctions.calculator.add(1, 2));");
+        }
 
-        // expected usage
-        // compile and load the "library" code
-        var libCodePtr =
-                engine.compile(
-                        new String(jsLibrarySource, StandardCharsets.UTF_8)
-                                // this code needs to be generated based on @GuestFunction generated
-                                // code
-                                + "\nglobalThis.jsFunctions = {};"
-                                + "\nglobalThis.jsFunctions."
-                                + "calculator"
-                                + " = { add };");
-        engine.exec(libCodePtr);
-        engine.free(libCodePtr);
-
-        // this is the code that will be generated by @GuestFunction
-        var userCodePtr = engine.compile("java_api.setResult(jsFunctions.calculator.add(1, 2));");
-        engine.exec(userCodePtr);
-        engine.free(userCodePtr);
-
-        engine.close();
-
-        assertEquals(3, result.get());
+        assertEquals("3", result.get());
     }
 
     @Test
-    public void useCollections() throws Exception {
-        var builtins =
-                Builtins.builder("java_api")
-                        .add(
-                                new HostFunction(
-                                        "log",
-                                        List.of(String.class),
-                                        String.class,
-                                        (args) -> {
-                                            String str = (String) args.get(0);
+    public void invokeGuestFunctions() throws Exception {
+        var invokables = Invokables.builder("js_api").add("add").add("append").build();
 
-                                            System.out.println("LOG - " + str);
-                                            return str;
-                                        }))
-                        .build();
+        try (var engine =
+                Engine.builder().addBuiltins(logBuiltins()).addInvokables(invokables).build()) {
+            assertEquals(
+                    "42",
+                    engine.invokeGuestFunction("js_api", "add", List.of("39", "3"), library()));
+            assertEquals(
+                    "[1,2,3,4]",
+                    engine.invokeGuestFunction(
+                            "js_api", "append", List.of("[1,2,3]", "4"), library()));
+            assertEquals(
+                    "\"ab\"",
+                    engine.invokeGuestFunction(
+                            "js_api", "add", List.of(json("a"), json("b")), library()));
+        }
+    }
+
+    @Test
+    public void guestFunctionResults() {
         var invokables =
-                Invokables.builder("js_api")
-                        .add(
-                                new GuestFunction(
-                                        "append", List.of(List.class, Integer.class), List.class))
+                Invokables.builder("from_js")
+                        .add("nothing")
+                        .add("identity")
+                        .add(new GuestFunction("aliased", "renamed"))
                         .build();
+        var code =
+                "function nothing() {}\n"
+                        + "function identity(x) { return x; }\n"
+                        + "function renamed() { return { \"fn\": \"renamed\" }; }\n";
 
-        var engine = Engine.builder().addBuiltins(builtins).addInvokables(invokables).build();
-
-        var jsLibrarySource =
-                EngineTest.class.getResourceAsStream("/library/dist/out.js").readAllBytes();
-
-        // this is the code that will be generated by @GuestFunction
-        var result =
-                (List)
-                        engine.invokeGuestFunction(
-                                "js_api",
-                                "append",
-                                List.of(List.of(1, 2, 3), 4),
-                                new String(jsLibrarySource, StandardCharsets.UTF_8));
-
-        engine.close();
-
-        assertEquals(4, result.size());
-        assertEquals(1, result.get(0));
-        assertEquals(2, result.get(1));
-        assertEquals(3, result.get(2));
-        assertEquals(4, result.get(3));
+        try (var engine = Engine.builder().addInvokables(invokables).build()) {
+            assertEquals("null", engine.invokeGuestFunction("from_js", "nothing", List.of(), code));
+            var nullArg = new ArrayList<String>();
+            nullArg.add(null);
+            assertEquals("null", engine.invokeGuestFunction("from_js", "identity", nullArg, code));
+            assertEquals(
+                    "{\"a\":\"\\u001e\"}",
+                    engine.invokeGuestFunction(
+                            "from_js", "identity", List.of("{\"a\":\"\\u001e\"}"), code));
+            assertEquals(
+                    "{\"fn\":\"renamed\"}",
+                    engine.invokeGuestFunction("from_js", "aliased", List.of(), code));
+        }
     }
 
     @Test
-    public void useInvokablesBundledLibrary() throws Exception {
-        var builtins =
-                Builtins.builder("java_api")
-                        .add(
-                                new HostFunction(
-                                        "log",
-                                        List.of(String.class),
-                                        String.class,
-                                        (args) -> {
-                                            String str = (String) args.get(0);
+    public void unknownGuestFunction() {
+        var invokables = Invokables.builder("from_js").add("f").build();
 
-                                            System.out.println("LOG - " + str);
-                                            return str;
-                                        }))
-                        .build();
-        var invokables =
-                Invokables.builder("js_api")
-                        .add(
-                                new GuestFunction(
-                                        "add",
-                                        List.of(Integer.class, Integer.class),
-                                        Integer.class))
-                        .build();
-
-        var engine = Engine.builder().addBuiltins(builtins).addInvokables(invokables).build();
-
-        var jsLibrarySource =
-                EngineTest.class.getResourceAsStream("/library/dist/out.js").readAllBytes();
-
-        // this is the code that will be generated by @GuestFunction
-        var result =
-                (Integer)
-                        engine.invokeGuestFunction(
-                                "js_api",
-                                "add",
-                                List.of(39, 3),
-                                new String(jsLibrarySource, StandardCharsets.UTF_8));
-
-        engine.close();
-
-        assertEquals(42, result);
+        try (var engine = Engine.builder().addInvokables(invokables).build()) {
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> engine.invokeGuestFunction("from_js", "g", List.of(), "function g() {}"));
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> engine.invokeGuestFunction("nope", "f", List.of(), "function f() {}"));
+        }
     }
 
     @Test
-    public void enableCachingOfCompiledJS() throws Exception {
-        // Build QuickJs instance
+    public void asyncGuestFunction() {
+        var invokables = Invokables.builder("from_js").add("twice").build();
+        var code = "async function twice(x) { return await Promise.resolve(x * 2); }";
+
+        try (var engine = Engine.builder().addInvokables(invokables).build()) {
+            assertEquals("42", engine.invokeGuestFunction("from_js", "twice", List.of("21"), code));
+        }
+    }
+
+    @Test
+    public void guestFunctionCanReplaceEngineGlobals() {
+        var invokables = Invokables.builder("from_js").add("hide").build();
+        var code =
+                "function hide() {\n"
+                        + "  globalThis.java_invoke = undefined;\n"
+                        + "  globalThis.quickjs4j_engine = undefined;\n"
+                        + "  globalThis.from_js = undefined;\n"
+                        + "  return 42;\n"
+                        + "}\n";
+
+        for (var jsGlobals : new boolean[] {true, false}) {
+            try (var engine =
+                    Engine.builder().addInvokables(invokables).withJsGlobals(jsGlobals).build()) {
+                assertEquals("42", engine.invokeGuestFunction("from_js", "hide", List.of(), code));
+            }
+        }
+    }
+
+    @Test
+    public void guestFunctionsWithoutJsGlobals() {
+        var invokables = Invokables.builder("from_js").add("add").add("twice").build();
+        var code =
+                "function add(a, b) { return a + b; }\n"
+                        + "async function twice(x) { return await Promise.resolve(x * 2); }\n";
+
+        try (var engine = Engine.builder().addInvokables(invokables).withJsGlobals(false).build()) {
+            assertEquals(
+                    "5", engine.invokeGuestFunction("from_js", "add", List.of("2", "3"), code));
+            assertEquals("42", engine.invokeGuestFunction("from_js", "twice", List.of("21"), code));
+            var compiled = engine.compilePortableGuestFunction(code);
+            assertEquals(
+                    "7",
+                    engine.invokePrecompiledGuestFunction(
+                            "from_js", "add", List.of("3", "4"), compiled));
+        }
+    }
+
+    @Test
+    public void withoutJsGlobalsNothingIsGenerated() {
+        var builtins = Builtins.builder("from_java").add("shout", args -> args.get(0)).build();
+        var invokables = Invokables.builder("from_js").add("probe").build();
+        var code =
+                "function probe() {\n"
+                        + "  return [typeof quickjs4j_engine, typeof globalThis.from_js,"
+                        + " typeof globalThis.from_java];\n"
+                        + "}\n";
+
+        try (var engine =
+                Engine.builder().addBuiltins(builtins).addInvokables(invokables).build()) {
+            assertEquals(
+                    "[\"object\",\"object\",\"object\"]",
+                    engine.invokeGuestFunction("from_js", "probe", List.of(), code));
+        }
+        try (var engine =
+                Engine.builder()
+                        .addBuiltins(builtins)
+                        .addInvokables(invokables)
+                        .withJsGlobals(false)
+                        .build()) {
+            assertEquals(0, engine.jsPreludeLineCount());
+            assertEquals(
+                    "[\"undefined\",\"undefined\",\"undefined\"]",
+                    engine.invokeGuestFunction("from_js", "probe", List.of(), code));
+        }
+    }
+
+    @Test
+    public void withoutJsGlobalsBuiltinsAreReachedThroughJavaInvoke() {
+        var builtins = Builtins.builder("from_java").add("shout", args -> args.get(0)).build();
+
+        try (var engine = Engine.builder().addBuiltins(builtins).withJsGlobals(false).build()) {
+            compileAndExec(
+                    engine,
+                    "console.log(JSON.parse(java_invoke(\"from_java\", \"shout\","
+                            + " JSON.stringify([\"x\"]))));");
+            assertEquals("x\n", engine.stdout());
+            assertThrows(
+                    GuestException.class, () -> compileAndExec(engine, "from_java.shout(\"x\");"));
+        }
+    }
+
+    @Test
+    public void enableCachingOfCompiledJS() {
         var engine = Engine.builder().build();
-
-        var jsSource = "console.log(\"hello world!\")";
-        var codePtr = engine.compile(jsSource);
-
+        var codePtr = engine.compile("console.log(\"hello world!\")");
         var jsBytecode = engine.readCompiled(codePtr);
         engine.free(codePtr);
         engine.close();
 
-        // Runtime QuickJs instance
-        var runtimeEngine = Engine.builder().build();
-        var runtimeCodePtr = runtimeEngine.writeCompiled(jsBytecode);
-        runtimeEngine.exec(runtimeCodePtr);
-        runtimeEngine.free(runtimeCodePtr);
-        runtimeEngine.close();
+        try (var runtimeEngine = Engine.builder().build()) {
+            var runtimeCodePtr = runtimeEngine.writeCompiled(jsBytecode);
+            runtimeEngine.exec(runtimeCodePtr);
+            runtimeEngine.free(runtimeCodePtr);
+            assertEquals("hello world!\n", runtimeEngine.stdout());
+        }
     }
 
     @Test
-    public void useInvokablesBundledLibraryWithCache() throws Exception {
-        var builtins =
-                Builtins.builder("java_api")
-                        .add(
-                                new HostFunction(
-                                        "log",
-                                        List.of(String.class),
-                                        String.class,
-                                        (args) -> {
-                                            String str = (String) args.get(0);
+    public void precompiledGuestFunction() throws Exception {
+        var invokables = Invokables.builder("js_api").add("add").build();
 
-                                            System.out.println("LOG - " + str);
-                                            return str;
-                                        }))
-                        .build();
-        var invokables =
-                Invokables.builder("js_api")
-                        .add(
-                                new GuestFunction(
-                                        "add",
-                                        List.of(Integer.class, Integer.class),
-                                        Integer.class))
-                        .build();
+        byte[] compiled;
+        try (var buildingEngine =
+                Engine.builder().addBuiltins(logBuiltins()).addInvokables(invokables).build()) {
+            compiled = buildingEngine.compilePortableGuestFunction(library());
+        }
 
-        var buildingEngine =
-                Engine.builder().addBuiltins(builtins).addInvokables(invokables).build();
-
-        var jsLibrarySource =
-                EngineTest.class.getResourceAsStream("/library/dist/out.js").readAllBytes();
-
-        // this is the code that will be generated by @GuestFunction
-        var jsCompiledCode =
-                buildingEngine.compilePortableGuestFunction(
-                        new String(jsLibrarySource, StandardCharsets.UTF_8));
-        // the separation is good, how things match together is not
-        buildingEngine.close();
-
-        // Now running on a separate engine without performing any compilation
-        var runningEngine =
-                Engine.builder().addBuiltins(builtins).addInvokables(invokables).build();
-        var result =
-                (Integer)
-                        runningEngine.invokePrecompiledGuestFunction(
-                                "js_api", "add", List.of(39, 4), jsCompiledCode);
-
-        runningEngine.close();
-
-        assertEquals(43, result);
-    }
-
-    @Test
-    public void apicurioBeforeVsAfter() throws Exception {
-        var builtins =
-                Builtins.builder("java_api")
-                        .add(
-                                new HostFunction(
-                                        "info",
-                                        List.of(String.class),
-                                        Void.class,
-                                        (args) -> {
-                                            String str = (String) args.get(0);
-
-                                            System.out.println("LOG - info - " + str);
-                                            return str;
-                                        }),
-                                new HostFunction(
-                                        "debug",
-                                        List.of(String.class),
-                                        Void.class,
-                                        (args) -> {
-                                            String str = (String) args.get(0);
-
-                                            System.out.println("LOG - debug - " + str);
-                                            return str;
-                                        }))
-                        .build();
-        var invokables =
-                Invokables.builder("ArtifactTypeScriptProvider_Invokables")
-                        .add(
-                                new GuestFunction(
-                                        "testCompatibility", List.of(String.class), JsonNode.class))
-                        .build();
-
-        var engine = Engine.builder().addBuiltins(builtins).addInvokables(invokables).build();
-
-        var jsLibrarySource =
-                EngineTest.class
-                        .getResourceAsStream("/apicurio-numbers/js-artifact-types-test.js")
-                        .readAllBytes();
-
-        var before1 = System.currentTimeMillis();
-        var result1 =
-                (JsonNode)
-                        engine.invokeGuestFunction(
-                                "ArtifactTypeScriptProvider_Invokables",
-                                "testCompatibility",
-                                List.of("zoobar"),
-                                new String(jsLibrarySource));
-        var after1 = System.currentTimeMillis();
-        var before2 = System.currentTimeMillis();
-        var result2 =
-                (JsonNode)
-                        engine.invokeGuestFunction(
-                                "ArtifactTypeScriptProvider_Invokables",
-                                "testCompatibility",
-                                List.of("barbaz"),
-                                new String(jsLibrarySource));
-        var after2 = System.currentTimeMillis();
-
-        engine.close();
-
-        assertTrue(result1.get("incompatibleDifferences").isArray());
-        assertTrue(result2.get("incompatibleDifferences").isArray());
-        var mapper = new ObjectMapper();
-        assertEquals(mapper.writeValueAsString(result1), mapper.writeValueAsString(result2));
-
-        System.out.println("Approx consumed time first run: " + (after1 - before1));
-        System.out.println("Approx consumed time second run: " + (after2 - before2));
-    }
-
-    @Test
-    public void getNumbersOnApicurioUseCase() throws Exception {
-        var before = System.currentTimeMillis();
-        var builtins =
-                Builtins.builder("java_api")
-                        .add(
-                                new HostFunction(
-                                        "info",
-                                        List.of(String.class),
-                                        Void.class,
-                                        (args) -> {
-                                            String str = (String) args.get(0);
-
-                                            System.out.println("LOG - info - " + str);
-                                            return str;
-                                        }),
-                                new HostFunction(
-                                        "debug",
-                                        List.of(String.class),
-                                        Void.class,
-                                        (args) -> {
-                                            String str = (String) args.get(0);
-
-                                            System.out.println("LOG - debug - " + str);
-                                            return str;
-                                        }))
-                        .build();
-        var invokables =
-                Invokables.builder("ArtifactTypeScriptProvider_Invokables")
-                        .add(
-                                new GuestFunction(
-                                        "testCompatibility", List.of(String.class), JsonNode.class))
-                        .build();
-
-        var buildingEngine =
-                Engine.builder().addBuiltins(builtins).addInvokables(invokables).build();
-
-        var jsLibrarySource =
-                EngineTest.class
-                        .getResourceAsStream("/apicurio-numbers/js-artifact-types-test.js")
-                        .readAllBytes();
-
-        // this is the code that will be generated by @GuestFunction
-        var jsCompiledCode =
-                buildingEngine.compilePortableGuestFunction(
-                        new String(jsLibrarySource, StandardCharsets.UTF_8));
-        // the separation is good, how things match together is not
-        // TODO: string escaping is not working correctly -> verify
-        // var argsStr = buildingEngine.computeArgs("ArtifactTypeScriptProvider_Invokables",
-        // "testCompatibility", List.of("123test"));
-
-        buildingEngine.close();
-        var compiled = System.currentTimeMillis();
-
-        // Now running on a separate engine without performing any compilation
-        var runningEngine =
-                Engine.builder().addBuiltins(builtins).addInvokables(invokables).build();
-        var result =
-                (JsonNode)
-                        runningEngine.invokePrecompiledGuestFunction(
-                                "ArtifactTypeScriptProvider_Invokables",
-                                "testCompatibility",
-                                List.of("123test"),
-                                jsCompiledCode);
-
-        runningEngine.close();
-
-        assertTrue(result.get("incompatibleDifferences").isArray());
-        var after = System.currentTimeMillis();
-
-        System.out.println("Approx consumed time: TOTAL: " + (after - before));
-        System.out.println("compilation: " + (compiled - before));
-        System.out.println("execution: " + (after - compiled));
+        try (var runningEngine =
+                Engine.builder().addBuiltins(logBuiltins()).addInvokables(invokables).build()) {
+            assertEquals(
+                    "43",
+                    runningEngine.invokePrecompiledGuestFunction(
+                            "js_api", "add", List.of("39", "4"), compiled));
+            assertEquals(
+                    "3",
+                    runningEngine.invokePrecompiledGuestFunction(
+                            "js_api", "add", List.of("1", "2"), compiled));
+        }
     }
 
     @Test
     public void handleExceptionsThrownInJava() {
         var builtins =
                 Builtins.builder("from_java")
-                        .addStringToString(
+                        .add(
                                 "imported_function",
-                                (str) -> {
+                                args -> {
                                     throw new IndexOutOfBoundsException("whatever");
                                 })
                         .build();
-        var engine = Engine.builder().addBuiltins(builtins).build();
 
-        // Act
-        var codePtr = engine.compile("from_java.imported_function(\"ciao\");");
-
-        var exception = assertThrows(IndexOutOfBoundsException.class, () -> engine.exec(codePtr));
-
-        assertEquals("whatever", exception.getMessage());
-
-        engine.free(codePtr);
-        engine.close();
+        try (var engine = Engine.builder().addBuiltins(builtins).build()) {
+            var exception =
+                    assertThrows(
+                            IndexOutOfBoundsException.class,
+                            () -> compileAndExec(engine, "from_java.imported_function(\"ciao\");"));
+            assertEquals("whatever", exception.getMessage());
+        }
     }
 
     @Test
     public void handleExceptionsThrownInJs() {
-        var engine = Engine.builder().build();
+        try (var engine = Engine.builder().build()) {
+            var exception =
+                    assertThrows(
+                            GuestException.class,
+                            () -> compileAndExec(engine, "throw \"hello exception\";"));
+            assertTrue(exception.getMessage().contains("hello exception"));
+        }
+    }
 
-        // Act
-        var codePtr = engine.compile("throw \"hello exception\";");
+    @Test
+    public void handleExceptionsThrownInGuestFunctions() {
+        var invokables = Invokables.builder("from_js").add("fail").build();
 
-        var exception = assertThrows(GuestException.class, () -> engine.exec(codePtr));
-
-        assertTrue(exception.getMessage().contains("hello exception"));
-
-        engine.free(codePtr);
-        engine.close();
+        try (var engine = Engine.builder().addInvokables(invokables).build()) {
+            var exception =
+                    assertThrows(
+                            GuestException.class,
+                            () ->
+                                    engine.invokeGuestFunction(
+                                            "from_js",
+                                            "fail",
+                                            List.of(),
+                                            "function fail() { throw new Error(\"boom\"); }"));
+            assertTrue(exception.getMessage().contains("boom"));
+        }
     }
 
     @Test
     public void failToCompileJs() {
-        var engine = Engine.builder().build();
-
-        var exception =
-                assertThrows(IllegalArgumentException.class, () -> engine.compile("1' \" 2 ..."));
-
-        assertTrue(exception.getMessage().contains("Failed to compile JS code"));
-
-        engine.close();
+        try (var engine = Engine.builder().build()) {
+            var exception =
+                    assertThrows(
+                            IllegalArgumentException.class, () -> engine.compile("1' \" 2 ..."));
+            assertTrue(exception.getMessage().contains("Failed to compile JS code"));
+        }
     }
 
     @Test
-    public void supportAsyncAwait() throws Exception {
-        var engine = Engine.builder().build();
-
-        var jsSource =
-                "function debug() {\n"
-                        + "  return Promise.resolve(\"foo\");\n"
-                        + "}\n"
-                        + "console.log(await debug());";
-        var codePtr = engine.compile(jsSource);
-        engine.exec(codePtr);
-        assertEquals("foo\n", engine.stdout());
-
-        engine.free(codePtr);
-        engine.close();
+    public void supportAsyncAwait() {
+        try (var engine = Engine.builder().build()) {
+            compileAndExec(
+                    engine,
+                    "function debug() {\n"
+                            + "  return Promise.resolve(\"foo\");\n"
+                            + "}\n"
+                            + "console.log(await debug());");
+            assertEquals("foo\n", engine.stdout());
+        }
     }
 
     @Test
-    public void testAsyncFunctionInvocation() throws Exception {
-        var invokable =
-                Invokables.builder("from_js")
+    public void engineArgsOutsideOfInvocation() {
+        var received = new AtomicReference<List<String>>();
+        var builtins =
+                Builtins.builder("from_java")
                         .add(
-                                new GuestFunction(
-                                        "validateString", List.of(String.class), ZodResult.class))
+                                "check",
+                                args -> {
+                                    received.set(args);
+                                    return null;
+                                })
                         .build();
-        var engine = Engine.builder().addInvokables(invokable).build();
 
-        var jsSource =
-                EngineTest.class.getResourceAsStream("/zod-async/dist/out.js").readAllBytes();
+        try (var engine = Engine.builder().addBuiltins(builtins).build()) {
+            compileAndExec(
+                    engine,
+                    "from_java.check(quickjs4j_engine.module_name(), quickjs4j_engine.args());");
+        }
 
-        var result =
-                (ZodResult)
-                        engine.invokeGuestFunction(
-                                "from_js",
-                                "validateString",
-                                List.of("tuna"),
-                                new String(jsSource, StandardCharsets.UTF_8));
-
-        assertTrue(result.success);
-        assertEquals("tuna", result.data);
-
-        engine.close();
+        assertEquals(List.of("null", "null"), received.get());
     }
 
     @Test
@@ -898,10 +719,7 @@ public class EngineTest {
 
     @Test
     public void jsPreludeLineCountGrowsWithEveryRegisteredBuiltin() {
-        var builtins =
-                Builtins.builder("from_java")
-                        .addStringToString("shout", String::toUpperCase)
-                        .build();
+        var builtins = Builtins.builder("from_java").add("shout", args -> args.get(0)).build();
 
         try (var engine = Engine.builder().addBuiltins(builtins).build()) {
             assertEquals(6, engine.jsPreludeLineCount());

@@ -10,6 +10,8 @@ import io.roastedroot.quickjs4j.annotations.HostFunction;
 import io.roastedroot.quickjs4j.annotations.HostRefParam;
 import io.roastedroot.quickjs4j.annotations.Invokables;
 import io.roastedroot.quickjs4j.annotations.ReturnsHostRef;
+import io.roastedroot.quickjs4j.binding.Binding;
+import io.roastedroot.quickjs4j.binding.TypedRunner;
 import io.roastedroot.quickjs4j.core.Engine;
 import io.roastedroot.quickjs4j.core.Runner;
 import org.junit.jupiter.api.Test;
@@ -71,23 +73,24 @@ class HelloJsTest {
         // the Java API
         private final JavaApi javaApi;
         // Sandbox
-        private final Runner runner;
+        private final TypedRunner runner;
         // the JS API
         private final JsApi jsApi;
 
         JsTest() {
             this.javaApi = new JavaApi();
+            var binding = Binding.create();
             var engine =
                     Engine.builder()
-                            .addBuiltins(JavaApi_Builtins.toBuiltins(this.javaApi))
-                            .addInvokables(JsApi_Invokables.toInvokables())
+                            .addBuiltins(JavaApi_Builtins.toBuiltins(binding, this.javaApi))
+                            .addInvokables(JsApi_Invokables.toInvokables(binding))
                             .build();
-            this.runner = Runner.builder().withEngine(engine).build();
+            this.runner = binding.bind(Runner.builder().withEngine(engine).build());
             this.jsApi = JsApi_Invokables.create(JS_LIBRARY_CODE, runner);
         }
 
         public void exec(String code) {
-            runner.compileAndExec(code);
+            runner.runner().compileAndExec(code);
         }
 
         public boolean isInvoked() {

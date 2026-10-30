@@ -2,12 +2,10 @@ package io.roastedroot.quickjs4j.core;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,7 +13,6 @@ import java.util.function.Function;
 import run.endive.log.Logger;
 import run.endive.log.SystemLogger;
 import run.endive.runtime.ByteArrayMemory;
-import run.endive.runtime.HostFunction;
 import run.endive.runtime.ImportValues;
 import run.endive.runtime.Instance;
 import run.endive.runtime.Memory;
@@ -28,8 +25,7 @@ import run.endive.wasm.types.ValueType;
 public final class Engine implements AutoCloseable {
     private static final int ALIGNMENT = 1;
 
-    private static final byte[] NULL_BYTES = "null".getBytes(UTF_8);
-    public static final ObjectMapper DEFAULT_OBJECT_MAPPER = new ObjectMapper();
+    private static final String NULL = "null";
 
     // 256 KiB, QuickJS's default
     private static final long DEFAULT_GC_THRESHOLD = 256 * 1024;
@@ -44,9 +40,6 @@ public final class Engine implements AutoCloseable {
 
     private final Map<String, Builtins> builtins;
     private final Map<String, Invokables> invokables;
-    private final ObjectMapper mapper;
-
-    private final List<Object> javaRefs = new ArrayList<>();
 
     private static final String ENGINE_MODULE_NAME = "quickjs4j_engine";
     private static final String MODULE_NAME_FUNC = "module_name";
@@ -56,11 +49,14 @@ public final class Engine implements AutoCloseable {
     private String invokeModuleName;
     private String invokeFunctionName;
     private String invokeArgs;
+    private String invokeResult;
 
     private final ScriptCache cache;
 
     private int jsPreludeLineCount;
     private String jsPrelude;
+    private String jsSuffix;
+    private String jsEpilogue;
 
     public static Builder builder() {
         return new Builder();
@@ -69,14 +65,13 @@ public final class Engine implements AutoCloseable {
     private Engine(
             Map<String, Builtins> builtins,
             Map<String, Invokables> invokables,
-            ObjectMapper mapper,
             Function<MemoryLimits, Memory> memoryFactory,
             ScriptCache cache,
             Logger logger,
             ByteArrayOutputStream stdout,
             ByteArrayOutputStream stderr,
-            long gcThreshold) {
-        this.mapper = mapper;
+            long gcThreshold,
+            boolean jsGlobals) {
         this.builtins = builtins;
         this.cache = cache;
         this.stdout = stdout;
@@ -86,9 +81,9 @@ public final class Engine implements AutoCloseable {
         builtins.put(
                 ENGINE_MODULE_NAME,
                 Builtins.builder(ENGINE_MODULE_NAME)
-                        .addVoidToString(MODULE_NAME_FUNC, () -> invokeModuleName)
-                        .addVoidToString(FUNCTION_NAME_FUNC, () -> invokeFunctionName)
-                        .addVoidToString(ARGS_FUNC, () -> invokeArgs)
+                        .add(MODULE_NAME_FUNC, args -> quote(invokeModuleName))
+                        .add(FUNCTION_NAME_FUNC, args -> quote(invokeFunctionName))
+                        .add(ARGS_FUNC, args -> invokeArgs)
                         .build());
 
         var wasiOptsBuilder = WasiOptions.builder().withStdout(stdout).withStderr(stderr);
@@ -102,7 +97,17 @@ public final class Engine implements AutoCloseable {
                             var builder = Builtins.builder(e.getKey());
                             e.getValue()
                                     .functions()
-                                    .forEach(entry -> builder.add(entry.setResultHostFunction()));
+                                    .forEach(
+                                            fn ->
+                                                    builder.add(
+                                                            fn.setResultFunName(),
+                                                            args -> {
+                                                                invokeResult =
+                                                                        args.isEmpty()
+                                                                                ? NULL
+                                                                                : args.get(0);
+                                                                return null;
+                                                            }));
                             this.builtins.put(e.getKey(), builder.build());
                         });
         this.invokables = invokables;
@@ -118,7 +123,14 @@ public final class Engine implements AutoCloseable {
                         .build();
         exports = new Engine_ModuleExports(instance);
         exports.initializeRuntime(gcThreshold);
-        buildJsPrelude();
+        if (jsGlobals) {
+            buildJsPrelude();
+            buildJsSuffix();
+        } else {
+            jsPrelude = "";
+            jsSuffix = "";
+        }
+        buildJsEpilogue();
     }
 
     private String readJavyString(int ptr, int len) {
@@ -126,33 +138,54 @@ public final class Engine implements AutoCloseable {
         return new String(bytes, UTF_8);
     }
 
-    public Object invokeGuestFunction(
-            String moduleName, String name, List<Object> args, String libraryCode) {
+    /** {@code args} and the result are JSON texts. */
+    public String invokeGuestFunction(
+            String moduleName, String name, List<String> args, String libraryCode) {
         return invokeGuestFunction(moduleName, name, args, libraryCode.getBytes(UTF_8));
     }
 
-    public Object invokeGuestFunction(
-            String moduleName, String name, List<Object> args, byte[] libraryCode) {
+    public String invokeGuestFunction(
+            String moduleName, String name, List<String> args, byte[] libraryCode) {
         return invokePrecompiledGuestFunction(
                 moduleName, name, args, compilePortableGuestFunction(libraryCode));
     }
 
-    private String invokeFunction() {
-        var funInvoke =
-                "globalThis[quickjs4j_engine.module_name()][quickjs4j_engine.function_name()](...JSON.parse(quickjs4j_engine.args()))";
-        Function<String, String> setResult =
-                (value) ->
-                        "java_invoke(quickjs4j_engine.module_name(),"
-                                + " quickjs4j_engine.function_name() + \"_set_result\","
-                                + " JSON.stringify(["
-                                + value
-                                + "]))";
-
-        return "Promise.resolve("
-                + funInvoke
-                + ").then((value) => { "
-                + setResult.apply("value")
-                + " }, (err) => { throw err; })";
+    // Calls the requested guest function without reading any global the guest code can replace
+    private void buildJsEpilogue() {
+        var guests = new StringBuilder();
+        for (var invokable : invokables.values()) {
+            guests.append('[').append(quote(invokable.moduleName())).append("]: {");
+            for (var func : invokable.functions()) {
+                guests.append('[')
+                        .append(quote(func.name()))
+                        .append("]: ")
+                        .append(func.globalName())
+                        .append(", ");
+            }
+            guests.append("}, ");
+        }
+        jsEpilogue =
+                "{\n"
+                        + "const __quickjs4j_invoke = java_invoke;\n"
+                        + "const __quickjs4j_engine = (fn) => JSON.parse(__quickjs4j_invoke("
+                        + quote(ENGINE_MODULE_NAME)
+                        + ", fn, \"[]\"));\n"
+                        + "const __quickjs4j_guests = {"
+                        + guests
+                        + "};\n"
+                        + "const __quickjs4j_module = __quickjs4j_engine("
+                        + quote(MODULE_NAME_FUNC)
+                        + ");\n"
+                        + "const __quickjs4j_function = __quickjs4j_engine("
+                        + quote(FUNCTION_NAME_FUNC)
+                        + ");\n"
+                        + "Promise.resolve(__quickjs4j_guests[__quickjs4j_module][__quickjs4j_function]"
+                        + "(...__quickjs4j_engine("
+                        + quote(ARGS_FUNC)
+                        + "))).then((value) => { __quickjs4j_invoke(__quickjs4j_module,"
+                        + " __quickjs4j_function + \"_set_result\", JSON.stringify([value])); },"
+                        + " (err) => { throw err; });\n"
+                        + "}\n";
     }
 
     // Plan:
@@ -170,10 +203,8 @@ public final class Engine implements AutoCloseable {
             buf.append(jsPrelude);
             buf.append(libraryCode);
             buf.append('\n');
-            buf.append(jsSuffix());
-            buf.append('\n');
-            buf.append(invokeFunction());
-            buf.append(";\n");
+            buf.append(jsSuffix);
+            buf.append(jsEpilogue);
 
             codePtr = compileRaw(buf.toString().getBytes(UTF_8));
             return readCompiled(codePtr);
@@ -184,53 +215,40 @@ public final class Engine implements AutoCloseable {
         }
     }
 
-    private String computeArgs(String moduleName, String name, List<Object> args) {
-        GuestFunction guestFunction = invokables.get(moduleName).byName(name);
-        if (guestFunction.paramTypes().size() != args.size()) {
+    private String computeArgs(String moduleName, String name, List<String> args) {
+        var module = invokables.get(moduleName);
+        if (module == null || module.byName(name) == null) {
             throw new IllegalArgumentException(
-                    "Guest function should be invoked with the expected "
-                            + guestFunction.paramTypes().size()
-                            + " params, but got: "
-                            + args.size());
+                    "Failed to find guest function with name " + name + " in module " + moduleName);
         }
-        StringBuilder paramsStr = new StringBuilder();
-        try {
-            for (int i = 0; i < args.size(); i++) {
-                if (i > 0) {
-                    paramsStr.append(", ");
-                }
-                var clazz = guestFunction.paramTypes().get(i);
-                if (clazz == HostRef.class) {
-                    javaRefs.add(args.get(i));
-                    var ptr = javaRefs.size() - 1;
-                    paramsStr.append(mapper.writeValueAsString(ptr));
-                } else {
-                    paramsStr.append(mapper.writeValueAsString(args.get(i)));
-                }
+        var json = new StringBuilder("[");
+        for (int i = 0; i < args.size(); i++) {
+            if (i > 0) {
+                json.append(',');
             }
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
+            var arg = args.get(i);
+            json.append(arg == null ? NULL : arg);
         }
-
-        return "[" + paramsStr + "]";
+        return json.append(']').toString();
     }
 
-    public Object invokePrecompiledGuestFunction(
-            String moduleName, String name, List<Object> args, byte[] compiledCode) {
+    public String invokePrecompiledGuestFunction(
+            String moduleName, String name, List<String> args, byte[] compiledCode) {
         int codePtr = 0;
         try {
             this.invokeModuleName = moduleName;
             this.invokeFunctionName = name;
             this.invokeArgs = computeArgs(moduleName, name, args);
+            this.invokeResult = null;
             codePtr = writeCompiled(compiledCode);
             exec(codePtr);
+            return invokeResult;
         } finally {
+            this.invokeResult = null;
             if (codePtr != 0) {
                 free(codePtr);
             }
         }
-
-        return invokables.get(moduleName).byName(name).getResult();
     }
 
     private long[] invokeBuiltin(Instance instance, long[] args) {
@@ -247,80 +265,116 @@ public final class Engine implements AutoCloseable {
         }
         var receiver = builtins.get(moduleName).byName(funcName);
 
-        var argsList = new ArrayList<>();
-        try {
-            JsonNode tree = mapper.readTree(argsString);
+        var result = receiver.invoke(splitArgs(argsString));
+        var returnBytes = (result == null ? NULL : result).getBytes(UTF_8);
 
-            for (int i = 0; i < receiver.paramTypes().size(); i++) {
-                var clazz = receiver.paramTypes().get(i);
-                JsonNode value = null;
-                if (tree.size() > i) {
-                    value = tree.get(i);
-                }
+        var returnPtr =
+                exports.cabiRealloc(
+                        0, // original_ptr
+                        0, // original_size
+                        ALIGNMENT, // alignment
+                        returnBytes.length // new size
+                        );
+        exports.memory().write(returnPtr, returnBytes);
 
-                if (clazz == HostRef.class) {
-                    if (value.isArray()) {
-                        var refs = new ArrayList<>();
-                        for (JsonNode elem : value) {
-                            refs.add(javaRefs.get(elem.intValue()));
-                        }
-                        argsList.add(refs);
-                    } else {
-                        argsList.add(javaRefs.get(value.intValue()));
-                    }
-                } else {
-                    argsList.add(mapper.treeToValue(value, clazz));
-                }
-            }
+        var LEN = 8;
+        var widePtr =
+                exports.cabiRealloc(
+                        0, // original_ptr
+                        0, // original_size
+                        ALIGNMENT, // alignment
+                        LEN // new size
+                        );
 
-            var res = receiver.invoke(argsList);
+        instance.memory().writeI32(widePtr, returnPtr);
+        instance.memory().writeI32(widePtr + 4, returnBytes.length);
 
-            // Converting Java references into pointers for JS
-            var returnType = receiver.returnType();
-            if (returnType == HostRef.class) {
-                returnType = Integer.class;
-                if (res instanceof HostRef) {
-                    res = ((HostRef) res).pointer();
-                } else {
-                    javaRefs.add(res);
-                    res = javaRefs.size() - 1;
-                }
-            }
-
-            var returnBytes =
-                    (returnType == Void.class)
-                            ? NULL_BYTES
-                            : mapper.writerFor(returnType).writeValueAsBytes(res);
-
-            var returnPtr =
-                    exports.cabiRealloc(
-                            0, // original_ptr
-                            0, // original_size
-                            ALIGNMENT, // alignment
-                            returnBytes.length // new size
-                            );
-            exports.memory().write(returnPtr, returnBytes);
-
-            var LEN = 8;
-            var widePtr =
-                    exports.cabiRealloc(
-                            0, // original_ptr
-                            0, // original_size
-                            ALIGNMENT, // alignment
-                            LEN // new size
-                            );
-
-            instance.memory().writeI32(widePtr, returnPtr);
-            instance.memory().writeI32(widePtr + 4, returnBytes.length);
-
-            return new long[] {widePtr};
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
-        }
+        return new long[] {widePtr};
     }
 
-    private final HostFunction invokeFn =
-            new HostFunction(
+    // Only delimits the elements, they are validated when deserialized
+    static List<String> splitArgs(String json) {
+        int start = skipWhitespace(json, 0);
+        int end = json.length();
+        while (end > start && isWhitespace(json.charAt(end - 1))) {
+            end--;
+        }
+        if (end - start < 2 || json.charAt(start) != '[' || json.charAt(end - 1) != ']') {
+            throw malformedArgs(json);
+        }
+        var result = new ArrayList<String>();
+        int depth = 0;
+        boolean inString = false;
+        boolean escaped = false;
+        int elementStart = start + 1;
+        for (int i = start + 1; i < end - 1; i++) {
+            char c = json.charAt(i);
+            if (inString) {
+                if (escaped) {
+                    escaped = false;
+                } else if (c == '\\') {
+                    escaped = true;
+                } else if (c == '"') {
+                    inString = false;
+                }
+                continue;
+            }
+            if (c == '"') {
+                inString = true;
+            } else if (c == '[' || c == '{') {
+                depth++;
+            } else if (c == ']' || c == '}') {
+                if (--depth < 0) {
+                    throw malformedArgs(json);
+                }
+            } else if (c == ',' && depth == 0) {
+                result.add(element(json, elementStart, i));
+                elementStart = i + 1;
+            }
+        }
+        if (inString || depth != 0) {
+            throw malformedArgs(json);
+        }
+        if (result.isEmpty() && skipWhitespace(json, elementStart) == end - 1) {
+            return List.of();
+        }
+        result.add(element(json, elementStart, end - 1));
+        return Collections.unmodifiableList(result);
+    }
+
+    private static String element(String json, int start, int end) {
+        start = skipWhitespace(json, start);
+        while (end > start && isWhitespace(json.charAt(end - 1))) {
+            end--;
+        }
+        if (start == end) {
+            throw malformedArgs(json);
+        }
+        return json.substring(start, end);
+    }
+
+    private static int skipWhitespace(String json, int index) {
+        while (index < json.length() && isWhitespace(json.charAt(index))) {
+            index++;
+        }
+        return index;
+    }
+
+    private static boolean isWhitespace(char c) {
+        return c == ' ' || c == '\t' || c == '\n' || c == '\r';
+    }
+
+    private static IllegalArgumentException malformedArgs(String json) {
+        var preview = json.length() > 100 ? json.substring(0, 100) + "..." : json;
+        return new IllegalArgumentException("Malformed host function arguments: " + preview);
+    }
+
+    private static String quote(String identifier) {
+        return identifier == null ? NULL : "\"" + identifier + "\"";
+    }
+
+    private final run.endive.runtime.HostFunction invokeFn =
+            new run.endive.runtime.HostFunction(
                     "endive",
                     "invoke",
                     List.of(
@@ -362,7 +416,7 @@ public final class Engine implements AutoCloseable {
     }
 
     // This function dynamically generates the js handlers for Invokables
-    private String jsSuffix() {
+    private void buildJsSuffix() {
         var suffixBuilder = new StringBuilder();
         for (Map.Entry<String, Invokables> invokable : invokables.entrySet()) {
             // The object is already defined by the set_result, just add the handlers
@@ -378,7 +432,7 @@ public final class Engine implements AutoCloseable {
                                 + ";\n");
             }
         }
-        return suffixBuilder.toString();
+        jsSuffix = suffixBuilder.toString();
     }
 
     public int compile(String js) {
@@ -564,13 +618,13 @@ public final class Engine implements AutoCloseable {
     public static final class Builder {
         private List<Builtins> builtins = new ArrayList<>();
         private List<Invokables> invokables = new ArrayList<>();
-        private ObjectMapper mapper;
         private Function<MemoryLimits, Memory> memoryFactory;
         private ScriptCache cache;
         private Logger logger;
         private ByteArrayOutputStream stdout;
         private ByteArrayOutputStream stderr;
         private long gcThreshold = DEFAULT_GC_THRESHOLD;
+        private boolean jsGlobals = true;
 
         private Builder() {}
 
@@ -581,11 +635,6 @@ public final class Engine implements AutoCloseable {
 
         public Builder addInvokables(Invokables invokables) {
             this.invokables.add(invokables);
-            return this;
-        }
-
-        public Builder withObjectMapper(ObjectMapper mapper) {
-            this.mapper = mapper;
             return this;
         }
 
@@ -626,10 +675,13 @@ public final class Engine implements AutoCloseable {
             return this;
         }
 
+        /** {@code false} skips the generated {@code globalThis.<module>.<fn>} wrappers. */
+        public Builder withJsGlobals(boolean jsGlobals) {
+            this.jsGlobals = jsGlobals;
+            return this;
+        }
+
         public Engine build() {
-            if (mapper == null) {
-                mapper = DEFAULT_OBJECT_MAPPER;
-            }
             if (memoryFactory == null) {
                 memoryFactory = ByteArrayMemory::new;
             }
@@ -658,13 +710,13 @@ public final class Engine implements AutoCloseable {
             return new Engine(
                     finalBuiltins,
                     finalInvokables,
-                    mapper,
                     memoryFactory,
                     cache,
                     logger,
                     stdout,
                     stderr,
-                    gcThreshold);
+                    gcThreshold,
+                    jsGlobals);
         }
     }
 }
