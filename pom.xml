@@ -62,7 +62,7 @@
     <surefire-plugin.version>3.6.1</surefire-plugin.version>
     <failsafe-plugin.version>${surefire-plugin.version}</failsafe-plugin.version>
     <maven-invoker-plugin.version>3.10.1</maven-invoker-plugin.version>
-    <maven-failsafe-plugin.version>3.6.0</maven-failsafe-plugin.version>
+    <maven-failsafe-plugin.version>3.6.1</maven-failsafe-plugin.version>
     <inlay-maven-plugin.version>0.0.4</inlay-maven-plugin.version>
 
     <!-- test time versions -->
