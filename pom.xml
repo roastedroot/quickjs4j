@@ -72,7 +72,7 @@
     <javy-plugin.version>999.0.0-SNAPSHOT</javy-plugin.version>
 
     <!-- runtime versions -->
-    <endive.version>1.1.0</endive.version>
+    <endive.version>1.2.0</endive.version>
     <jackson.version>2.22.4</jackson.version>
     <javaparser.version>3.28.2</javaparser.version>
   </properties>
