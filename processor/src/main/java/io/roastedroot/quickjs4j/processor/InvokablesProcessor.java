@@ -69,11 +69,10 @@ public final class InvokablesProcessor extends Quickjs4jAbstractProcessor {
             cu.addImport(type.getQualifiedName().toString());
         }
 
-        cu.addImport("io.roastedroot.quickjs4j.core.Runner");
+        cu.addImport("io.roastedroot.quickjs4j.binding.Binding");
+        cu.addImport("io.roastedroot.quickjs4j.binding.TypedGuestFunction");
+        cu.addImport("io.roastedroot.quickjs4j.binding.TypedRunner");
         cu.addImport("io.roastedroot.quickjs4j.core.Invokables");
-        cu.addImport("io.roastedroot.quickjs4j.core.GuestFunction");
-        // TODO: verify HostRefs in GuestFunctions
-        cu.addImport("io.roastedroot.quickjs4j.core.HostRef");
         cu.addImport(List.class);
 
         var typeName = type.getSimpleName().toString();
@@ -87,12 +86,13 @@ public final class InvokablesProcessor extends Quickjs4jAbstractProcessor {
                         .addSingleMemberAnnotation(Generated.class, processorName);
 
         classDef.addField(String.class, "jsLibrary", Modifier.Keyword.FINAL);
-        classDef.addField("io.roastedroot.quickjs4j.core.Runner", "runner", Modifier.Keyword.FINAL);
+        classDef.addField(
+                "io.roastedroot.quickjs4j.binding.TypedRunner", "runner", Modifier.Keyword.FINAL);
 
         var constructor =
                 classDef.addConstructor()
                         .addParameter(String.class, "jsLibrary")
-                        .addParameter("io.roastedroot.quickjs4j.core.Runner", "runner")
+                        .addParameter("io.roastedroot.quickjs4j.binding.TypedRunner", "runner")
                         .setPrivate(true);
 
         constructor
@@ -160,25 +160,20 @@ public final class InvokablesProcessor extends Quickjs4jAbstractProcessor {
 
         var newJsFunctions =
                 new ArrayCreationExpr(
-                        parseType("GuestFunction"),
+                        parseType("TypedGuestFunction"),
                         new NodeList<>(new ArrayCreationLevel()),
                         new ArrayInitializerExpr(NodeList.nodeList(functions)));
 
         var invokablesCreationHandle =
                 new MethodCallExpr(
-                        new MethodCallExpr(
-                                new MethodCallExpr(
-                                        new NameExpr("Invokables"),
-                                        new SimpleName("builder"),
-                                        NodeList.nodeList(new StringLiteralExpr(moduleName))),
-                                new SimpleName("add"),
-                                NodeList.nodeList(newJsFunctions)),
-                        new SimpleName("build"),
-                        NodeList.nodeList());
+                        new NameExpr("binding"),
+                        new SimpleName("invokables"),
+                        NodeList.nodeList(new StringLiteralExpr(moduleName), newJsFunctions));
 
         classDef.addMethod("toInvokables")
                 .setPublic(true)
                 .setStatic(true)
+                .addParameter("Binding", "binding")
                 .setType("Invokables")
                 .setBody(new BlockStmt(new NodeList<>(new ReturnStmt(invokablesCreationHandle))));
 
@@ -186,7 +181,7 @@ public final class InvokablesProcessor extends Quickjs4jAbstractProcessor {
                 .setPublic(true)
                 .setStatic(true)
                 .addParameter(String.class, "jsLibrary")
-                .addParameter("io.roastedroot.quickjs4j.core.Runner", "runner")
+                .addParameter("io.roastedroot.quickjs4j.binding.TypedRunner", "runner")
                 .setType(typeName)
                 .setBody(
                         new BlockStmt(
@@ -237,7 +232,7 @@ public final class InvokablesProcessor extends Quickjs4jAbstractProcessor {
             default:
                 var typeLiteral = removeGenerics(returnName);
                 if (annotatedWith(executable, ReturnsHostRef.class)) {
-                    var javaRefType = "io.roastedroot.quickjs4j.core.HostRef";
+                    var javaRefType = "io.roastedroot.quickjs4j.binding.HostRef";
                     returnType = new FieldAccessExpr(new NameExpr(javaRefType), "class");
                 } else {
                     returnType = new FieldAccessExpr(new NameExpr(typeLiteral), "class");
@@ -270,7 +265,7 @@ public final class InvokablesProcessor extends Quickjs4jAbstractProcessor {
                 default:
                     var typeLiteral = removeGenerics(parameter.asType().toString());
                     if (annotatedWith(parameter, HostRefParam.class)) {
-                        var javaRefType = "io.roastedroot.quickjs4j.core.HostRef";
+                        var javaRefType = "io.roastedroot.quickjs4j.binding.HostRef";
                         paramTypes.add(new FieldAccessExpr(new NameExpr(javaRefType), "class"));
                     } else {
                         paramTypes.add(new FieldAccessExpr(new NameExpr(typeLiteral), "class"));
@@ -305,7 +300,7 @@ public final class InvokablesProcessor extends Quickjs4jAbstractProcessor {
         // create Js function
         var function =
                 new ObjectCreationExpr()
-                        .setType("GuestFunction")
+                        .setType("TypedGuestFunction")
                         .addArgument(new StringLiteralExpr(name))
                         .addArgument(new MethodCallExpr(new NameExpr("List"), "of", paramTypes))
                         .addArgument(returnType);

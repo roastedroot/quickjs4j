@@ -1,41 +1,24 @@
 package io.roastedroot.quickjs4j.core;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Function;
 
-public class HostFunction {
+/** A Java function callable from JS, taking one JSON text per argument and returning JSON. */
+public final class HostFunction {
     private final String name;
-    private final List<Class> paramTypes;
-    private final Class returnType;
+    private final Function<List<String>, String> fn;
 
-    // function implementation
-    private final Function<List<Object>, Object> fn;
-
-    public HostFunction(
-            String name,
-            List<Class> paramTypes,
-            Class returnType,
-            Function<List<Object>, Object> fn) {
-        this.name = name;
-        this.paramTypes = paramTypes;
-        this.returnType = returnType;
-
-        this.fn = fn;
+    public HostFunction(String name, Function<List<String>, String> fn) {
+        this.name = Identifiers.check(name, "function");
+        this.fn = Objects.requireNonNull(fn, "fn");
     }
 
-    public Object invoke(List<Object> args) {
+    public String invoke(List<String> args) {
         return fn.apply(args);
     }
 
     public String name() {
         return name;
-    }
-
-    public List<Class> paramTypes() {
-        return paramTypes;
-    }
-
-    public Class returnType() {
-        return returnType;
     }
 }

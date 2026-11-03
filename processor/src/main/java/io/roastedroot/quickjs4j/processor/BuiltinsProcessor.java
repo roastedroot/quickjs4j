@@ -86,9 +86,9 @@ public final class BuiltinsProcessor extends Quickjs4jAbstractProcessor {
             cu.addImport(type.getQualifiedName().toString());
         }
 
+        cu.addImport("io.roastedroot.quickjs4j.binding.Binding");
+        cu.addImport("io.roastedroot.quickjs4j.binding.TypedHostFunction");
         cu.addImport("io.roastedroot.quickjs4j.core.Builtins");
-        cu.addImport("io.roastedroot.quickjs4j.core.HostFunction");
-        cu.addImport("io.roastedroot.quickjs4j.core.HostRef");
         cu.addImport(List.class);
 
         var typeName = type.getSimpleName().toString();
@@ -103,25 +103,20 @@ public final class BuiltinsProcessor extends Quickjs4jAbstractProcessor {
 
         var newJsFunctions =
                 new ArrayCreationExpr(
-                        parseType("HostFunction"),
+                        parseType("TypedHostFunction"),
                         new NodeList<>(new ArrayCreationLevel()),
                         new ArrayInitializerExpr(NodeList.nodeList(functions)));
 
         var builtinsCreationHandle =
                 new MethodCallExpr(
-                        new MethodCallExpr(
-                                new MethodCallExpr(
-                                        new NameExpr("Builtins"),
-                                        new SimpleName("builder"),
-                                        NodeList.nodeList(new StringLiteralExpr(name))),
-                                new SimpleName("add"),
-                                NodeList.nodeList(newJsFunctions)),
-                        new SimpleName("build"),
-                        NodeList.nodeList());
+                        new NameExpr("binding"),
+                        new SimpleName("builtins"),
+                        NodeList.nodeList(new StringLiteralExpr(name), newJsFunctions));
 
         classDef.addMethod("toBuiltins")
                 .setPublic(true)
                 .setStatic(true)
+                .addParameter("Binding", "binding")
                 .addParameter(typeName, "jsModule")
                 .setType("Builtins")
                 .setBody(new BlockStmt(new NodeList<>(new ReturnStmt(builtinsCreationHandle))));
@@ -181,7 +176,7 @@ public final class BuiltinsProcessor extends Quickjs4jAbstractProcessor {
                 break;
             default:
                 if (annotatedWith(executable, ReturnsHostRef.class)) {
-                    var javaRefType = "io.roastedroot.quickjs4j.core.HostRef";
+                    var javaRefType = "io.roastedroot.quickjs4j.binding.HostRef";
                     returnType = new FieldAccessExpr(new NameExpr(javaRefType), "class");
                 } else {
                     returnType = new FieldAccessExpr(new NameExpr(returnName), "class");
@@ -224,7 +219,7 @@ public final class BuiltinsProcessor extends Quickjs4jAbstractProcessor {
                     var typeLiteral = parameter.asType().toString();
                     var argIndex = paramTypes.size();
                     if (annotatedWith(parameter, HostRefParam.class)) {
-                        var javaRefType = "io.roastedroot.quickjs4j.core.HostRef";
+                        var javaRefType = "io.roastedroot.quickjs4j.binding.HostRef";
                         paramTypes.add(new FieldAccessExpr(new NameExpr(javaRefType), "class"));
                         if (parameter.asType().getKind() == TypeKind.ARRAY) {
                             var componentType =
@@ -290,7 +285,7 @@ public final class BuiltinsProcessor extends Quickjs4jAbstractProcessor {
         // create Js function
         var function =
                 new ObjectCreationExpr()
-                        .setType("HostFunction")
+                        .setType("TypedHostFunction")
                         .addArgument(new StringLiteralExpr(name))
                         .addArgument(new MethodCallExpr(new NameExpr("List"), "of", paramTypes))
                         .addArgument(returnType)
