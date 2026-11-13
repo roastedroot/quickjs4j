@@ -33,7 +33,7 @@ jobs:
       uses: actions/setup-java@v6
       with:
         distribution: 'temurin'
-        java-version: '11'
+        java-version: '17'
         cache: maven
 
     - name: Test quickjs4j against the locally built plugin

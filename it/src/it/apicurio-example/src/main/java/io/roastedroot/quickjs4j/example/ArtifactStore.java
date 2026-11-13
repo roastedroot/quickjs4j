@@ -4,6 +4,8 @@ import io.roastedroot.quickjs4j.annotations.Builtins;
 import io.roastedroot.quickjs4j.annotations.GuestFunction;
 import io.roastedroot.quickjs4j.annotations.HostFunction;
 import io.roastedroot.quickjs4j.annotations.Invokables;
+import io.roastedroot.quickjs4j.binding.Binding;
+import io.roastedroot.quickjs4j.binding.TypedRunner;
 import io.roastedroot.quickjs4j.core.Engine;
 import io.roastedroot.quickjs4j.core.Runner;
 import java.io.IOException;
@@ -12,7 +14,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 class ArtifactStore implements AutoCloseable {
     private final JavaApi javaApi;
-    private final Runner runner;
+    private final TypedRunner runner;
     private final JsApi jsApi;
 
     private AtomicReference<String> lastMessage = new AtomicReference<>();
@@ -34,12 +36,13 @@ class ArtifactStore implements AutoCloseable {
 
     public ArtifactStore() throws IOException {
         this.javaApi = new JavaApi();
+        var binding = Binding.create();
         var engine =
                 Engine.builder()
-                        .addBuiltins(JavaApi_Builtins.toBuiltins(this.javaApi))
-                        .addInvokables(JsApi_Invokables.toInvokables())
+                        .addBuiltins(JavaApi_Builtins.toBuiltins(binding, this.javaApi))
+                        .addInvokables(JsApi_Invokables.toInvokables(binding))
                         .build();
-        this.runner = Runner.builder().withEngine(engine).build();
+        this.runner = binding.bind(Runner.builder().withEngine(engine).build());
         String jsLibrary =
                 new String(
                         ArtifactStore.class

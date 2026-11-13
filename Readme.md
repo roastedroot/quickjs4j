@@ -30,7 +30,7 @@ Add QuickJs4J as a standard Maven dependency:
 ```xml
 <dependency>
     <groupId>io.roastedroot</groupId>
-    <artifactId>quickjs4j</artifactId>
+    <artifactId>quickjs4j-jackson3</artifactId> <!-- or quickjs4j-jackson2 -->
 </dependency>
 ```
 
@@ -50,6 +50,7 @@ Note: You must explicitly print your JavaScript program’s output using `System
 QuickJs4J runs JavaScript in a secure, sandboxed environment. To simplify communication, it allows you to bind Java methods so they can be called directly from JavaScript.
 
 ```java
+import io.roastedroot.quickjs4j.binding.Binding;
 import io.roastedroot.quickjs4j.core.Engine;
 import io.roastedroot.quickjs4j.core.Runner;
 import io.roastedroot.quickjs4j.annotations.HostFunction;
@@ -68,13 +69,14 @@ class JavaApi {
     }
 }
 
+var binding = Binding.create();
 var engine =
     Engine.builder()
-          .addBuiltins(JavaApi_Builtins.toBuiltins(new JavaApi()))
+          .addBuiltins(JavaApi_Builtins.toBuiltins(binding, new JavaApi()))
           .build();
 
 try (var runner = Runner.builder().withEngine(engine).build()) {
-    runner.exec("from_java.my_java_check(from_java.my_java_func(40, 2));");
+    runner.compileAndExec("from_java.my_java_check(from_java.my_java_func(40, 2));");
 }
 ```
 
@@ -83,6 +85,7 @@ try (var runner = Runner.builder().withEngine(engine).build()) {
 To invoke functions defined in a JavaScript or TypeScript library, define an interface like this:
 
 ```java
+import io.roastedroot.quickjs4j.binding.Binding;
 import io.roastedroot.quickjs4j.core.Engine;
 import io.roastedroot.quickjs4j.core.Runner;
 import io.roastedroot.quickjs4j.annotations.GuestFunction;
@@ -94,15 +97,16 @@ interface JsApi {
     String sub(int x, int y);
 }
 
+var binding = Binding.create();
 var engine =
     Engine.builder()
-          .addInvokables(JsApi_Invokables.toInvokables())
+          .addInvokables(JsApi_Invokables.toInvokables(binding))
           .build();
 
 // Inlined for demo; normally loaded from a packaged distribution file
 String jsLibrary = "function sub(x, y) { return \"hello js \" + (x - y); };";
 
-try (var runner = Runner.builder().withEngine(engine).build()) {
+try (var runner = binding.bind(Runner.builder().withEngine(engine).build())) {
     var jsApi = JsApi_Invokables.create(jsLibrary, runner);
     System.out.println(jsApi.sub(3, 1));
 }
@@ -189,7 +193,36 @@ try (var calculator = new Calculator_Proxy(jsLibrary, new CalculatorContext()) {
 }
 ```
 
+Proxies also accept a `JsonCodec`:
+
+```java
+new Calculator_Proxy(jsLibrary, new CalculatorContext(), new Jackson3Codec(jsonMapper));
+```
+
 > ***_NOTE:_*** currently only basic use is supported.
+
+## JSON codecs
+
+Values cross between Java and JavaScript as JSON:
+
+* `quickjs4j`: the engine, exchanging JSON text.
+* `quickjs4j-binding`: typed functions, mapped by a `JsonCodec`.
+* `quickjs4j-jackson2` and `quickjs4j-jackson3`: the codecs.
+
+The codec is found with `ServiceLoader`, or passed explicitly:
+
+```java
+var binding = Binding.create(new Jackson3Codec(mapper));
+```
+
+### Migrating from 0.1
+
+* Java 17 or newer is required.
+* Depend on `quickjs4j-jackson2` or `quickjs4j-jackson3` instead of `quickjs4j`.
+* Generated `toBuiltins` and `toInvokables` take a `Binding`, and `create` takes `binding.bind(runner)`.
+* Typed functions are `TypedHostFunction` and `TypedGuestFunction`, registered with `binding.builtins(...)` and `binding.invokables(...)`.
+* `withObjectMapper(mapper)` becomes `Binding.create(new Jackson2Codec(mapper))`.
+* Bytecode from `compilePortableGuestFunction` must be compiled again.
 
 ## JSR-223 Scripting Engine
 
@@ -235,7 +268,7 @@ Key points:
 
 To build this project, you'll need:
 
-* JDK 11 or newer
+* JDK 17 or newer
 * Maven
 
 ```bash

@@ -19,6 +19,7 @@ import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.expr.ThisExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
+import com.github.javaparser.ast.stmt.ExplicitConstructorInvocationStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import io.roastedroot.quickjs4j.annotations.ScriptInterface;
 import java.io.IOException;
@@ -212,8 +213,12 @@ public class ScriptInterfaceProcessor extends Quickjs4jAbstractProcessor {
             cu.addImport(type.getQualifiedName().toString());
         }
 
-        cu.addImport("io.roastedroot.quickjs4j.core.Runner");
+        cu.addImport("io.roastedroot.quickjs4j.binding.Binding");
+        cu.addImport("io.roastedroot.quickjs4j.binding.JsonCodec");
+        cu.addImport("io.roastedroot.quickjs4j.binding.JsonCodecs");
+        cu.addImport("io.roastedroot.quickjs4j.binding.TypedRunner");
         cu.addImport("io.roastedroot.quickjs4j.core.Engine");
+        cu.addImport("io.roastedroot.quickjs4j.core.Runner");
 
         var clazz =
                 cu.addClass(name + "_Proxy")
@@ -221,18 +226,37 @@ public class ScriptInterfaceProcessor extends Quickjs4jAbstractProcessor {
                         .addImplementedType(AutoCloseable.class)
                         .addSingleMemberAnnotation(Generated.class, processorName);
 
-        clazz.addField("Runner", "runner", Modifier.Keyword.PRIVATE, Modifier.Keyword.FINAL);
+        clazz.addField("TypedRunner", "runner", Modifier.Keyword.PRIVATE, Modifier.Keyword.FINAL);
         clazz.addField(
                 name + "_Invokables", "delegate", Modifier.Keyword.PRIVATE, Modifier.Keyword.FINAL);
 
+        var withBuiltins = hasBuiltinsContext(builtinsContext);
+        var contextType = withBuiltins ? builtinsContext.asType().toString() : null;
+
+        // codec found through ServiceLoader
+        var discovering = clazz.addConstructor(Modifier.Keyword.PUBLIC);
+        discovering.addParameter("String", "script");
+        var discoveringArgs = NodeList.<Expression>nodeList(new NameExpr("script"));
+        if (withBuiltins) {
+            discovering.addParameter(contextType, "ctx");
+            discoveringArgs.add(new NameExpr("ctx"));
+        }
+        discoveringArgs.add(new MethodCallExpr(new NameExpr("JsonCodecs"), "discover"));
+        discovering.setBody(
+                new BlockStmt()
+                        .addStatement(
+                                new ExplicitConstructorInvocationStmt(
+                                        true, null, discoveringArgs)));
+
         var constructor = clazz.addConstructor(Modifier.Keyword.PUBLIC);
         constructor.addParameter("String", "script");
+        if (withBuiltins) {
+            constructor.addParameter(contextType, "ctx");
+        }
+        constructor.addParameter("JsonCodec", "codec");
 
         Expression engineBuilder = new MethodCallExpr(new NameExpr("Engine"), "builder");
-        if (hasBuiltinsContext(builtinsContext)) {
-            // add builtins
-            constructor.addParameter(builtinsContext.asType().toString(), "ctx");
-
+        if (withBuiltins) {
             engineBuilder =
                     new MethodCallExpr(
                             engineBuilder,
@@ -242,6 +266,7 @@ public class ScriptInterfaceProcessor extends Quickjs4jAbstractProcessor {
                                             new NameExpr(name + "_Builtins_Builtins"),
                                             "toBuiltins",
                                             NodeList.nodeList(
+                                                    new NameExpr("binding"),
                                                     new ObjectCreationExpr(
                                                             null,
                                                             parseClassOrInterfaceType(
@@ -258,10 +283,19 @@ public class ScriptInterfaceProcessor extends Quickjs4jAbstractProcessor {
                                 NodeList.nodeList(
                                         new MethodCallExpr(
                                                 new NameExpr(name + "_Invokables_Invokables"),
-                                                "toInvokables"))),
+                                                "toInvokables",
+                                                NodeList.nodeList(new NameExpr("binding"))))),
                         "build");
 
         var constructorBody = new BlockStmt();
+        constructorBody.addStatement(
+                new AssignExpr(
+                        new VariableDeclarationExpr(parseType("Binding"), "binding"),
+                        new MethodCallExpr(
+                                new NameExpr("Binding"),
+                                "create",
+                                NodeList.nodeList(new NameExpr("codec"))),
+                        AssignExpr.Operator.ASSIGN));
         constructorBody.addStatement(
                 new AssignExpr(
                         new VariableDeclarationExpr(parseType("Engine"), "engine"),
@@ -271,11 +305,16 @@ public class ScriptInterfaceProcessor extends Quickjs4jAbstractProcessor {
                 new AssignExpr(
                         new FieldAccessExpr(new ThisExpr(), "runner"),
                         new MethodCallExpr(
-                                new MethodCallExpr(
-                                        new MethodCallExpr(new NameExpr("Runner"), "builder"),
-                                        "withEngine",
-                                        NodeList.nodeList(new NameExpr("engine"))),
-                                "build"),
+                                new NameExpr("binding"),
+                                "bind",
+                                NodeList.nodeList(
+                                        new MethodCallExpr(
+                                                new MethodCallExpr(
+                                                        new MethodCallExpr(
+                                                                new NameExpr("Runner"), "builder"),
+                                                        "withEngine",
+                                                        NodeList.nodeList(new NameExpr("engine"))),
+                                                "build"))),
                         AssignExpr.Operator.ASSIGN));
         constructorBody.addStatement(
                 new AssignExpr(

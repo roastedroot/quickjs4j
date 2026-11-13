@@ -15,7 +15,17 @@
   <description>Integration tests for the QuickJs4J annotations</description>
 
   <dependencies>
-    <!-- Dummy dependency to force the order -->
+    <!-- Dummy dependencies to force the order -->
+    <dependency>
+      <groupId>io.roastedroot</groupId>
+      <artifactId>quickjs4j-jackson2</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.roastedroot</groupId>
+      <artifactId>quickjs4j-jackson3</artifactId>
+      <version>${project.version}</version>
+    </dependency>
     <dependency>
       <groupId>io.roastedroot</groupId>
       <artifactId>quickjs4j-processor</artifactId>

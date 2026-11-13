@@ -1,15 +1,12 @@
-package io.roastedroot.quickjs4j.core;
+package io.roastedroot.quickjs4j.jackson3;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.JsonDeserializer;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import java.util.Objects;
 
-@JsonDeserialize(using = JsonDeserializer.None.class)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public final class Point {
+public final class AnnotatedPoint {
     @JsonProperty("x")
     private final int x;
 
@@ -17,25 +14,17 @@ public final class Point {
     private final int y;
 
     @JsonCreator
-    public Point(@JsonProperty("x") int x, @JsonProperty("y") int y) {
+    public AnnotatedPoint(@JsonProperty("x") int x, @JsonProperty("y") int y) {
         this.x = x;
         this.y = y;
     }
 
-    public int x() {
-        return x;
-    }
-
-    public int y() {
-        return y;
-    }
-
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof Point)) {
+        if (!(o instanceof AnnotatedPoint)) {
             return false;
         }
-        Point point = (Point) o;
+        AnnotatedPoint point = (AnnotatedPoint) o;
         return x == point.x && y == point.y;
     }
 
