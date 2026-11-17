@@ -235,7 +235,7 @@ Key points:
 
 To build this project, you'll need:
 
-* JDK 11 or newer
+* JDK 17 or newer
 * Maven
 
 ```bash
