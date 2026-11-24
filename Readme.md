@@ -191,6 +191,25 @@ try (var calculator = new Calculator_Proxy(jsLibrary, new CalculatorContext()) {
 
 > ***_NOTE:_*** currently only basic use is supported.
 
+## JSON
+
+Values passed between Java and JavaScript are mapped with JSON, using one of:
+
+- `quickjs4j`: the default codec, currently Jackson 2.
+- `quickjs4j-jackson2`: Jackson 2.
+- `quickjs4j-jackson3`: Jackson 3, preferred when both are on the classpath.
+- `quickjs4j-core`: no JSON library; implement `JsonCodec`, and `JsonCodecProvider` to be found on the classpath, to use another one.
+
+To use your own mapper, or to choose the codec explicitly instead of relying on the classpath, as libraries should:
+
+```java
+var codec = Jackson3Codec.builder().withObjectMapper(mapper).build();
+Engine.builder().withJsonCodec(codec);
+Calculator_Proxy.builder(jsLibrary, new CalculatorContext()).withJsonCodec(codec).build();
+```
+
+Migrating from 0.1: `Engine.DEFAULT_OBJECT_MAPPER` is removed, and `withObjectMapper(mapper)` becomes `withJsonCodec(Jackson2Codec.builder().withObjectMapper(mapper).build())`.
+
 ## JSR-223 Scripting Engine
 
 QuickJs4J also provides a [JSR-223](https://www.jcp.org/en/jsr/detail?id=223) (`javax.script`) compliant scripting engine with `Compilable` and `Invocable` support:

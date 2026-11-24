@@ -1,0 +1,5 @@
+{
+  "resources": {
+    "includes": [{ "pattern": "\\QMETA-INF/services/io.roastedroot.quickjs4j.core.JsonCodecProvider\\E" }]
+  }
+}

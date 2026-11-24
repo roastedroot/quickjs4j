@@ -2,9 +2,6 @@ package io.roastedroot.quickjs4j.core;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -29,7 +26,6 @@ public final class Engine implements AutoCloseable {
     private static final int ALIGNMENT = 1;
 
     private static final byte[] NULL_BYTES = "null".getBytes(UTF_8);
-    public static final ObjectMapper DEFAULT_OBJECT_MAPPER = new ObjectMapper();
 
     // 256 KiB, QuickJS's default
     private static final long DEFAULT_GC_THRESHOLD = 256 * 1024;
@@ -44,7 +40,7 @@ public final class Engine implements AutoCloseable {
 
     private final Map<String, Builtins> builtins;
     private final Map<String, Invokables> invokables;
-    private final ObjectMapper mapper;
+    private final JsonCodec codec;
 
     private final List<Object> javaRefs = new ArrayList<>();
 
@@ -69,14 +65,14 @@ public final class Engine implements AutoCloseable {
     private Engine(
             Map<String, Builtins> builtins,
             Map<String, Invokables> invokables,
-            ObjectMapper mapper,
+            JsonCodec codec,
             Function<MemoryLimits, Memory> memoryFactory,
             ScriptCache cache,
             Logger logger,
             ByteArrayOutputStream stdout,
             ByteArrayOutputStream stderr,
             long gcThreshold) {
-        this.mapper = mapper;
+        this.codec = codec != null ? codec : JsonCodecs.discover();
         this.builtins = builtins;
         this.cache = cache;
         this.stdout = stdout;
@@ -194,22 +190,18 @@ public final class Engine implements AutoCloseable {
                             + args.size());
         }
         StringBuilder paramsStr = new StringBuilder();
-        try {
-            for (int i = 0; i < args.size(); i++) {
-                if (i > 0) {
-                    paramsStr.append(", ");
-                }
-                var clazz = guestFunction.paramTypes().get(i);
-                if (clazz == HostRef.class) {
-                    javaRefs.add(args.get(i));
-                    var ptr = javaRefs.size() - 1;
-                    paramsStr.append(mapper.writeValueAsString(ptr));
-                } else {
-                    paramsStr.append(mapper.writeValueAsString(args.get(i)));
-                }
+        for (int i = 0; i < args.size(); i++) {
+            if (i > 0) {
+                paramsStr.append(", ");
             }
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
+            var clazz = guestFunction.paramTypes().get(i);
+            if (clazz == HostRef.class) {
+                javaRefs.add(args.get(i));
+                var ptr = javaRefs.size() - 1;
+                paramsStr.append(ptr);
+            } else {
+                paramsStr.append(jsonCodec().toJson(args.get(i), Object.class));
+            }
         }
 
         return "[" + paramsStr + "]";
@@ -247,76 +239,75 @@ public final class Engine implements AutoCloseable {
         }
         var receiver = builtins.get(moduleName).byName(funcName);
 
-        var argsList = new ArrayList<>();
-        try {
-            JsonNode tree = mapper.readTree(argsString);
-
-            for (int i = 0; i < receiver.paramTypes().size(); i++) {
-                var clazz = receiver.paramTypes().get(i);
-                JsonNode value = null;
-                if (tree.size() > i) {
-                    value = tree.get(i);
-                }
-
-                if (clazz == HostRef.class) {
-                    if (value.isArray()) {
-                        var refs = new ArrayList<>();
-                        for (JsonNode elem : value) {
-                            refs.add(javaRefs.get(elem.intValue()));
-                        }
-                        argsList.add(refs);
-                    } else {
-                        argsList.add(javaRefs.get(value.intValue()));
-                    }
-                } else {
-                    argsList.add(mapper.treeToValue(value, clazz));
-                }
-            }
-
-            var res = receiver.invoke(argsList);
-
-            // Converting Java references into pointers for JS
-            var returnType = receiver.returnType();
-            if (returnType == HostRef.class) {
-                returnType = Integer.class;
-                if (res instanceof HostRef) {
-                    res = ((HostRef) res).pointer();
-                } else {
-                    javaRefs.add(res);
-                    res = javaRefs.size() - 1;
-                }
-            }
-
-            var returnBytes =
-                    (returnType == Void.class)
-                            ? NULL_BYTES
-                            : mapper.writerFor(returnType).writeValueAsBytes(res);
-
-            var returnPtr =
-                    exports.cabiRealloc(
-                            0, // original_ptr
-                            0, // original_size
-                            ALIGNMENT, // alignment
-                            returnBytes.length // new size
-                            );
-            exports.memory().write(returnPtr, returnBytes);
-
-            var LEN = 8;
-            var widePtr =
-                    exports.cabiRealloc(
-                            0, // original_ptr
-                            0, // original_size
-                            ALIGNMENT, // alignment
-                            LEN // new size
-                            );
-
-            instance.memory().writeI32(widePtr, returnPtr);
-            instance.memory().writeI32(widePtr + 4, returnBytes.length);
-
-            return new long[] {widePtr};
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
+        var paramTypes = receiver.paramTypes();
+        var types = new ArrayList<Class<?>>(paramTypes.size());
+        for (var clazz : paramTypes) {
+            types.add(clazz == HostRef.class ? Object.class : clazz);
         }
+        var values = jsonCodec().fromJsonArray(argsString, types);
+        var argsList = new ArrayList<>(values.size());
+        for (int i = 0; i < values.size(); i++) {
+            var value = values.get(i);
+            argsList.add(paramTypes.get(i) == HostRef.class ? resolveHostRefs(value) : value);
+        }
+
+        var res = receiver.invoke(argsList);
+
+        // Converting Java references into pointers for JS
+        var returnType = receiver.returnType();
+        if (returnType == HostRef.class) {
+            returnType = Integer.class;
+            if (res instanceof HostRef) {
+                res = ((HostRef) res).pointer();
+            } else {
+                javaRefs.add(res);
+                res = javaRefs.size() - 1;
+            }
+        }
+
+        var returnBytes =
+                (returnType == Void.class)
+                        ? NULL_BYTES
+                        : jsonCodec().toJson(res, returnType).getBytes(UTF_8);
+
+        var returnPtr =
+                exports.cabiRealloc(
+                        0, // original_ptr
+                        0, // original_size
+                        ALIGNMENT, // alignment
+                        returnBytes.length // new size
+                        );
+        exports.memory().write(returnPtr, returnBytes);
+
+        var LEN = 8;
+        var widePtr =
+                exports.cabiRealloc(
+                        0, // original_ptr
+                        0, // original_size
+                        ALIGNMENT, // alignment
+                        LEN // new size
+                        );
+
+        instance.memory().writeI32(widePtr, returnPtr);
+        instance.memory().writeI32(widePtr + 4, returnBytes.length);
+
+        return new long[] {widePtr};
+    }
+
+    private Object resolveHostRefs(Object value) {
+        if (value instanceof List) {
+            var refs = new ArrayList<>();
+            for (var elem : (List<?>) value) {
+                refs.add(javaRefs.get(((Number) elem).intValue()));
+            }
+            return refs;
+        }
+        return javaRefs.get(((Number) value).intValue());
+    }
+
+    /** The codec set with {@link Builder#withJsonCodec}, or the one found with ServiceLoader. */
+    public JsonCodec jsonCodec() {
+        return codec;
     }
 
     private final HostFunction invokeFn =
@@ -564,7 +555,7 @@ public final class Engine implements AutoCloseable {
     public static final class Builder {
         private List<Builtins> builtins = new ArrayList<>();
         private List<Invokables> invokables = new ArrayList<>();
-        private ObjectMapper mapper;
+        private JsonCodec codec;
         private Function<MemoryLimits, Memory> memoryFactory;
         private ScriptCache cache;
         private Logger logger;
@@ -584,8 +575,8 @@ public final class Engine implements AutoCloseable {
             return this;
         }
 
-        public Builder withObjectMapper(ObjectMapper mapper) {
-            this.mapper = mapper;
+        public Builder withJsonCodec(JsonCodec codec) {
+            this.codec = codec;
             return this;
         }
 
@@ -627,9 +618,6 @@ public final class Engine implements AutoCloseable {
         }
 
         public Engine build() {
-            if (mapper == null) {
-                mapper = DEFAULT_OBJECT_MAPPER;
-            }
             if (memoryFactory == null) {
                 memoryFactory = ByteArrayMemory::new;
             }
@@ -658,7 +646,7 @@ public final class Engine implements AutoCloseable {
             return new Engine(
                     finalBuiltins,
                     finalInvokables,
-                    mapper,
+                    codec,
                     memoryFactory,
                     cache,
                     logger,
