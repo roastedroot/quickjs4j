@@ -1,5 +1,6 @@
 package io.roastedroot.quickjs4j.processor;
 
+import static com.github.javaparser.StaticJavaParser.parseBodyDeclaration;
 import static com.github.javaparser.StaticJavaParser.parseClassOrInterfaceType;
 import static com.github.javaparser.StaticJavaParser.parseType;
 import static java.lang.String.format;
@@ -214,6 +215,7 @@ public class ScriptInterfaceProcessor extends Quickjs4jAbstractProcessor {
 
         cu.addImport("io.roastedroot.quickjs4j.core.Runner");
         cu.addImport("io.roastedroot.quickjs4j.core.Engine");
+        cu.addImport("io.roastedroot.quickjs4j.core.JsonCodec");
 
         var clazz =
                 cu.addClass(name + "_Proxy")
@@ -225,10 +227,29 @@ public class ScriptInterfaceProcessor extends Quickjs4jAbstractProcessor {
         clazz.addField(
                 name + "_Invokables", "delegate", Modifier.Keyword.PRIVATE, Modifier.Keyword.FINAL);
 
-        var constructor = clazz.addConstructor(Modifier.Keyword.PUBLIC);
+        var proxy = name + "_Proxy";
+        var params = "String script";
+        var args = "script";
+        var ctxField = "";
+        var ctxAssign = "";
+        if (hasBuiltinsContext(builtinsContext)) {
+            params += ", " + builtinsContext.asType() + " ctx";
+            args += ", ctx";
+            ctxField = "private final " + builtinsContext.asType() + " ctx;";
+            ctxAssign = "this.ctx = ctx;";
+        }
+        clazz.addMember(
+                parseBodyDeclaration(
+                        format("public %s(%s) { this(%s, null); }", proxy, params, args)));
+
+        var constructor = clazz.addConstructor(Modifier.Keyword.PRIVATE);
         constructor.addParameter("String", "script");
 
-        Expression engineBuilder = new MethodCallExpr(new NameExpr("Engine"), "builder");
+        Expression engineBuilder =
+                new MethodCallExpr(
+                        new MethodCallExpr(new NameExpr("Engine"), "builder"),
+                        "withJsonCodec",
+                        NodeList.nodeList(new NameExpr("codec")));
         if (hasBuiltinsContext(builtinsContext)) {
             // add builtins
             constructor.addParameter(builtinsContext.asType().toString(), "ctx");
@@ -249,6 +270,8 @@ public class ScriptInterfaceProcessor extends Quickjs4jAbstractProcessor {
                                                             NodeList.nodeList(
                                                                     new NameExpr("ctx")))))));
         }
+
+        constructor.addParameter("JsonCodec", "codec");
 
         engineBuilder =
                 new MethodCallExpr(
@@ -288,6 +311,36 @@ public class ScriptInterfaceProcessor extends Quickjs4jAbstractProcessor {
                                         new FieldAccessExpr(new ThisExpr(), "runner"))),
                         AssignExpr.Operator.ASSIGN));
         constructor.setBody(constructorBody);
+
+        clazz.addMember(
+                parseBodyDeclaration(
+                        format(
+                                "public static Builder builder(%s) { return new Builder(%s); }",
+                                params, args)));
+        clazz.addMember(
+                parseBodyDeclaration(
+                        """
+                        public static final class Builder {
+                            private final String script;
+                            %s
+                            private JsonCodec codec;
+
+                            private Builder(%s) {
+                                this.script = script;
+                                %s
+                            }
+
+                            public Builder withJsonCodec(JsonCodec codec) {
+                                this.codec = codec;
+                                return this;
+                            }
+
+                            public %s build() {
+                                return new %s(%s, codec);
+                            }
+                        }
+                        """
+                                .formatted(ctxField, params, ctxAssign, proxy, proxy, args)));
 
         clazz.addMethod("close", Modifier.Keyword.PUBLIC)
                 .addAnnotation(Override.class)

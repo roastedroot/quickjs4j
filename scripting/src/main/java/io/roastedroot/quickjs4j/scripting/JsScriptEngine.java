@@ -1,12 +1,12 @@
 package io.roastedroot.quickjs4j.scripting;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.roastedroot.quickjs4j.core.BasicScriptCache;
 import io.roastedroot.quickjs4j.core.Engine;
 import io.roastedroot.quickjs4j.core.GuestException;
 import io.roastedroot.quickjs4j.core.GuestFunction;
 import io.roastedroot.quickjs4j.core.Invokables;
+import io.roastedroot.quickjs4j.core.JsonCodec;
+import io.roastedroot.quickjs4j.core.JsonCodecException;
 import io.roastedroot.quickjs4j.core.Runner;
 import io.roastedroot.quickjs4j.core.ScriptCache;
 import java.io.IOException;
@@ -37,9 +37,8 @@ public class JsScriptEngine extends AbstractScriptEngine
                     + "  return (0, eval)(script);\n"
                     + "}";
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
-
     private final Runner runner;
+    private final JsonCodec codec;
     private int lastStdoutLength;
     private int lastStderrLength;
 
@@ -61,6 +60,7 @@ public class JsScriptEngine extends AbstractScriptEngine
                                         .build())
                         .build();
         this.runner = Runner.builder().withEngine(engine).build();
+        this.codec = engine.jsonCodec();
     }
 
     @Override
@@ -274,8 +274,8 @@ public class JsScriptEngine extends AbstractScriptEngine
                     sb.append(", ");
                 }
                 try {
-                    sb.append(MAPPER.writeValueAsString(args[i]));
-                } catch (JsonProcessingException e) {
+                    sb.append(codec.toJson(args[i], Object.class));
+                } catch (JsonCodecException e) {
                     throw new ScriptException("Failed to serialize argument: " + e.getMessage());
                 }
             }

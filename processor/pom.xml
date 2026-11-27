@@ -41,7 +41,7 @@
         <version>${maven-compiler-plugin.version}</version>
         <configuration>
           <parameters>true</parameters>
-          <release>11</release>
+          <release>${maven.compiler.release}</release>
           <compilerArgs>-proc:none</compilerArgs>
         </configuration>
       </plugin>
